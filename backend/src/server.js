@@ -22,23 +22,17 @@ const PORT = process.env.PORT || 5000;
 
 async function startServer() {
   try {
-    console.log("MONGO_URI =", process.env.MONGO_URI);
     console.log("🔌 Încerc conexiunea la MongoDB...");
 
-    try {
-      if (!process.env.MONGO_URI) {
-        throw new Error("MONGO_URI lipsește din fișierul .env");
-      }
-
-      await mongoose.connect(process.env.MONGO_URI, {
-        serverSelectionTimeoutMS: 5000,
-      });
-
-      console.log("✅ MongoDB conectat!");
-    } catch (mongoError) {
-      console.log("⚠️ MongoDB nu este disponibil acum. Pornesc serverul fără baza de date.");
-      console.log("Detaliu:", mongoError.message);
+    if (!process.env.MONGO_URI) {
+      throw new Error("MONGO_URI lipsește din Environment Variables");
     }
+
+    await mongoose.connect(process.env.MONGO_URI, {
+      serverSelectionTimeoutMS: 5000,
+    });
+
+    console.log("✅ MongoDB conectat!");
 
     app.listen(PORT, () => {
       console.log(`🚀 Server pornit pe portul ${PORT}`);
