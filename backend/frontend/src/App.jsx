@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 
+const API_URL = import.meta.env.VITE_API_URL;
+
 function App() {
   const [docs, setDocs] = useState([]);
   const [file, setFile] = useState(null);
@@ -9,7 +11,7 @@ function App() {
 
   const loadDocs = async () => {
     try {
-      const res = await axios.get("http://localhost:5000/documents");
+      const res = await axios.get(`${API_URL}/documents`);
       setDocs(res.data.documents || []);
     } catch (err) {
       console.error("Eroare la listare:", err);
@@ -35,7 +37,7 @@ function App() {
       formData.append("file", file);
 
       const res = await axios.post(
-        "http://localhost:5000/documents/upload",
+        `${API_URL}/documents/upload`,
         formData,
         {
           headers: {
