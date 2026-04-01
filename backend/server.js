@@ -1,74 +1,44 @@
-// ================= IMPORTURI =================
 const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
 require("dotenv").config();
 
-// ================= INIT APP =================
+const documentsRoutes = require("./src/routes/documents.routes");
+const searchRoutes = require("./src/routes/search.routes");
+
 const app = express();
+
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
+
+app.get("/", (req, res) => {
+  res.send("API Arhiva Cloud funcționează ✅");
+});
+
+app.use("/documents", documentsRoutes);
+app.use("/search", searchRoutes);
 
 const PORT = process.env.PORT || 5000;
 
-// ================= MODEL TEST =================
-const TestSchema = new mongoose.Schema(
-  {
-    message: String,
-  },
-  { timestamps: true }
-);
-
-const Test = mongoose.model("Test", TestSchema);
-
-// ================= RUTE =================
-
-// Test server simplu
-app.get("/", (req, res) => {
-  res.send("Serverul pentru Arhiva Cloud funcționează! 🎉");
-});
-
-// Test salvare în MongoDB
-app.get("/db-test", async (req, res) => {
-  try {
-    const documentSalvat = await Test.create({
-      message: "Salut! Testul MongoDB funcționează 🎉",
-    });
-
-    res.json({
-      success: true,
-      data: documentSalvat,
-    });
-
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
-  }
-});
-
-// ================= PORNIRE SERVER =================
 async function startServer() {
   try {
+    console.log("🔌 Încerc conexiunea la MongoDB...");
+
     if (!process.env.MONGO_URI) {
-      throw new Error("MONGO_URI nu este definit în .env");
+      throw new Error("MONGO_URI lipsește din Environment Variables");
     }
 
-    console.log("🔌 Se încearcă conectarea la MongoDB...");
-
     await mongoose.connect(process.env.MONGO_URI, {
-      serverSelectionTimeoutMS: 10000,
+      serverSelectionTimeoutMS: 5000,
     });
 
-    console.log("✅ Conectat la MongoDB Atlas cu succes!");
+    console.log("✅ MongoDB conectat!");
 
     app.listen(PORT, () => {
-      console.log(`🚀 Serverul rulează pe portul ${PORT}`);
+      console.log(`🚀 Server pornit pe portul ${PORT}`);
     });
-
-  } catch (err) {
-    console.error("❌ Eroare la conectare:", err.message);
+  } catch (error) {
+    console.error("❌ Eroare la pornire:", error.message);
     process.exit(1);
   }
 }
