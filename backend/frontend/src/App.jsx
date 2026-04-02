@@ -62,8 +62,18 @@ function App() {
   };
 
   return (
-    <div style={{ padding: "40px", fontFamily: "Arial" }}>
-      <h1>Arhiva Cloud Documente</h1>
+    <div
+      style={{
+        padding: "40px",
+        fontFamily: "Arial",
+        minHeight: "100vh",
+        backgroundColor: "#1f1f1f",
+        color: "#f2f2f2",
+      }}
+    >
+      <h1 style={{ fontSize: "56px", marginBottom: "30px" }}>
+        Arhiva Cloud Documente
+      </h1>
 
       <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
         <input
@@ -72,25 +82,45 @@ function App() {
           onChange={(e) => setFile(e.target.files?.[0] || null)}
         />
 
-        <button onClick={uploadFile} disabled={loading}>
+        <button
+          onClick={uploadFile}
+          disabled={loading}
+          style={{
+            padding: "10px 22px",
+            backgroundColor: "#111",
+            color: "#fff",
+            border: "none",
+            borderRadius: "10px",
+            cursor: "pointer",
+          }}
+        >
           {loading ? "Uploading..." : "Upload"}
         </button>
       </div>
 
       {message && (
-        <p style={{ marginTop: "12px", color: "#ddd" }}>
+        <p style={{ marginTop: "20px", color: "#ddd", fontSize: "16px" }}>
           {message}
         </p>
       )}
 
-      <h2 style={{ marginTop: "30px" }}>Documente</h2>
+      <h2 style={{ marginTop: "40px", fontSize: "28px" }}>Documente</h2>
 
       {docs.length === 0 ? (
         <p>Nu există documente încă.</p>
       ) : (
         docs.map((doc) => (
-          <div key={doc._id} style={{ marginBottom: "10px" }}>
-            <a href={doc.file?.url} target="_blank" rel="noreferrer">
+          <div key={doc._id} style={{ marginBottom: "14px" }}>
+            <a
+              href={doc.file?.url}
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                color: "#6c63ff",
+                textDecoration: "underline",
+                fontSize: "18px",
+              }}
+            >
               {doc.file?.originalName}
             </a>
           </div>
