@@ -42,5 +42,5 @@ async function startServer() {
     process.exit(1);
   }
 }
-
+console.log("CLOUDINARY:", process.env.CLOUDINARY_API_KEY);
 startServer();
