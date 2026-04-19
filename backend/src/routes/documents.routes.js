@@ -1,3 +1,4 @@
+const auth = require("../middleware/auth");
 const express = require("express");
 const multer = require("multer");
 const cloudinary = require("../config/cloudinary");
@@ -8,7 +9,7 @@ const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
 // Upload document (PDF/JPG/PNG) + extract text + save in MongoDB
-router.post("/upload", upload.single("file"), async (req, res) => {
+router.post("/upload", auth, upload.single("file"), async (req, res) => {
   try {
     if (!req.file) {
       return res
@@ -19,7 +20,6 @@ router.post("/upload", upload.single("file"), async (req, res) => {
     const isPdf = req.file.mimetype === "application/pdf";
     const resourceType = isPdf ? "raw" : "image";
 
-    // 1) Upload în Cloudinary
     const uploadResult = await new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
         {
@@ -31,13 +31,11 @@ router.post("/upload", upload.single("file"), async (req, res) => {
       stream.end(req.file.buffer);
     });
 
-    // 2) Extract text (PDF text / OCR)
     const text = await extractText({
       buffer: req.file.buffer,
       mimeType: req.file.mimetype,
     });
 
-    // 3) Save în MongoDB
     const doc = await Document.create({
       file: {
         originalName: req.file.originalname,
@@ -57,13 +55,13 @@ router.post("/upload", upload.single("file"), async (req, res) => {
 });
 
 // List documents
-router.get("/", async (req, res) => {
+router.get("/", auth, async (req, res) => {
   const docs = await Document.find().sort({ createdAt: -1 }).limit(50);
   res.json({ ok: true, documents: docs });
 });
 
 // Get one document
-router.get("/:id", async (req, res) => {
+router.get("/:id", auth, async (req, res) => {
   const doc = await Document.findById(req.params.id);
   if (!doc) {
     return res
