@@ -36,8 +36,15 @@ function Register() {
       saveAuth(res.data);
       navigate("/dashboard");
     } catch (err) {
-      setMessage(err.response?.data?.error || "Eroare la înregistrare.");
-    } finally {
+  console.error("REGISTER ERROR:", err.response?.data || err.message);
+
+  setMessage(
+    err.response?.data?.error ||
+    err.response?.data?.message ||
+    err.message ||
+    "Eroare la înregistrare."
+  );
+} finally {
       setLoading(false);
     }
   };
