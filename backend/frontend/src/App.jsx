@@ -109,21 +109,18 @@ function App() {
       {docs.length === 0 ? (
         <p>Nu există documente încă.</p>
       ) : (
-        docs.map((doc) => (
-          <div key={doc._id} style={{ marginBottom: "14px" }}>
-            <a
-              href={doc.file?.url}
-              target="_blank"
-              rel="noreferrer"
-              style={{
-                color: "#6c63ff",
-                textDecoration: "underline",
-                fontSize: "18px",
-              }}
-            >
-              {doc.file?.originalName}
-            </a>
-          </div>
+       docs.map((doc) => (
+  <div key={doc._id} style={{ marginBottom: "10px" }}>
+    <a
+      href={doc.file?.url.replace("/upload/", "/upload/fl_attachment/")}
+      target="_blank"
+      rel="noreferrer"
+      style={{ color: "#6c63ff", textDecoration: "underline" }}
+    >
+      {doc.file?.originalName}
+    </a>
+  </div>
+
         ))
       )}
     </div>
