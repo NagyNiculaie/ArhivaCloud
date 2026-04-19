@@ -11,15 +11,20 @@ const upload = multer({ storage: multer.memoryStorage() });
 router.post("/upload", upload.single("file"), async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ ok: false, error: "Lipsește fișierul (field: file)." });
+      return res
+        .status(400)
+        .json({ ok: false, error: "Lipsește fișierul (field: file)." });
     }
+
+    const isPdf = req.file.mimetype === "application/pdf";
+    const resourceType = isPdf ? "raw" : "image";
 
     // 1) Upload în Cloudinary
     const uploadResult = await new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
         {
           folder: "arhiva-cloud",
-          resource_type: "auto",
+          resource_type: resourceType,
         },
         (err, result) => (err ? reject(err) : resolve(result))
       );
@@ -32,7 +37,7 @@ router.post("/upload", upload.single("file"), async (req, res) => {
       mimeType: req.file.mimetype,
     });
 
-    // 3) Save în MongoDB (embedding gol deocamdată)
+    // 3) Save în MongoDB
     const doc = await Document.create({
       file: {
         originalName: req.file.originalname,
@@ -42,7 +47,7 @@ router.post("/upload", upload.single("file"), async (req, res) => {
         publicId: uploadResult.public_id,
       },
       extractedText: text,
-      embedding: [], // AI later
+      embedding: [],
     });
 
     res.json({ ok: true, document: doc });
@@ -60,7 +65,11 @@ router.get("/", async (req, res) => {
 // Get one document
 router.get("/:id", async (req, res) => {
   const doc = await Document.findById(req.params.id);
-  if (!doc) return res.status(404).json({ ok: false, error: "Document inexistent." });
+  if (!doc) {
+    return res
+      .status(404)
+      .json({ ok: false, error: "Document inexistent." });
+  }
   res.json({ ok: true, document: doc });
 });
 
