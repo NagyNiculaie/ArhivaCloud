@@ -3,6 +3,7 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 require("dotenv").config();
 
+const authRoutes = require("./src/routes/auth.routes");
 const documentsRoutes = require("./src/routes/documents.routes");
 const searchRoutes = require("./src/routes/search.routes");
 
@@ -15,6 +16,7 @@ app.get("/", (req, res) => {
   res.send("API Arhiva Cloud funcționează ✅");
 });
 
+app.use("/auth", authRoutes);
 app.use("/documents", documentsRoutes);
 app.use("/search", searchRoutes);
 
@@ -42,5 +44,5 @@ async function startServer() {
     process.exit(1);
   }
 }
-console.log("CLOUDINARY:", process.env.CLOUDINARY_API_KEY);
+
 startServer();
