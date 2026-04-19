@@ -71,6 +71,25 @@ function Dashboard() {
     }
   };
 
+  const deleteDocument = async (id) => {
+    try {
+      await axios.delete(`${API_URL}/documents/${id}`, {
+        headers: {
+          Authorization: `Bearer ${getToken()}`,
+        },
+      });
+
+      setMessage("Document șters cu succes.");
+      await loadDocs();
+    } catch (err) {
+      console.error("Eroare la ștergere:", err);
+      setMessage(
+        "Eroare la ștergere: " +
+          (err.response?.data?.error || err.message)
+      );
+    }
+  };
+
   const handleLogout = () => {
     logout();
     navigate("/login");
@@ -135,14 +154,26 @@ function Dashboard() {
                     </p>
                   </div>
 
-                  <a
-                    href={doc.file?.url.replace("/upload/", "/upload/fl_attachment/")}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={styles.docLink}
-                  >
-                    Descarcă
-                  </a>
+                  <div style={styles.docActions}>
+                    <a
+                      href={doc.file?.url.replace(
+                        "/upload/",
+                        "/upload/fl_attachment/"
+                      )}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={styles.docLink}
+                    >
+                      Descarcă
+                    </a>
+
+                    <button
+                      onClick={() => deleteDocument(doc._id)}
+                      style={styles.deleteBtn}
+                    >
+                      Șterge
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -267,10 +298,24 @@ const styles = {
     color: "#94a3b8",
     fontSize: "14px",
   },
-  docLink: {
+  docActions: {
+    display: "flex",
+    gap: "12px",
     marginTop: "auto",
+    alignItems: "center",
+  },
+  docLink: {
     color: "#818cf8",
     textDecoration: "none",
+    fontWeight: "bold",
+  },
+  deleteBtn: {
+    backgroundColor: "#ef4444",
+    color: "#fff",
+    border: "none",
+    borderRadius: "10px",
+    padding: "10px 14px",
+    cursor: "pointer",
     fontWeight: "bold",
   },
 };
