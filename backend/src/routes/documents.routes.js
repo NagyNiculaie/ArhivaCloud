@@ -90,25 +90,16 @@ router.get("/:id/preview", async (req, res) =>  {
     res.status(500).json({ ok: false, error: err.message });
   }
 });
-router.get("/:id/preview", auth, async (req, res) => {
+router.get("/:id/preview", async (req, res) => {
   try {
     const doc = await Document.findById(req.params.id);
 
     if (!doc) {
-      return res.status(404).json({
-        ok: false,
-        error: "Document inexistent.",
-      });
+      return res.status(404).json({ ok: false, error: "Document inexistent." });
     }
-
-    // 🔥 REDIRECT direct către PDF
-    res.redirect(doc.file.url);
-
+    return res.redirect(doc.file.url);
   } catch (err) {
-    res.status(500).json({
-      ok: false,
-      error: err.message,
-    });
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 module.exports = router;
