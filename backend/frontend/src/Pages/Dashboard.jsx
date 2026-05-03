@@ -3,6 +3,7 @@ import axios from "axios";
 import { getToken, getUser, logout } from "../Utils/auth";
 import { useNavigate } from "react-router-dom";
 
+
 const API_URL = import.meta.env.VITE_API_URL;
 
 function Dashboard() {
@@ -13,6 +14,7 @@ function Dashboard() {
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [previewDoc, setPreviewDoc] = useState(null);
 
   const loadDocs = async () => {
     try {
