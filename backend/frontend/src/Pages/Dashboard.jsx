@@ -165,7 +165,25 @@ function Dashboard() {
                       target="_blank"
                       rel="noreferrer"
                       style={styles.docLink}
+                    
                     >
+                   <button
+                      onClick={() => setPreviewDoc(doc)}
+                      style={styles.previewBtn}
+                    >
+                      Preview
+                    </button>
+
+                    <a
+                      href={doc.file?.url.replace(
+                        "/upload/",
+                        "/upload/fl_attachment/"
+                      )}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={styles.docLink}
+                    ></a>
+
                       Descarcă
                     </a>
 
@@ -181,6 +199,30 @@ function Dashboard() {
             </div>
           )}
         </section>
+                  {previewDoc && (
+              <div style={styles.modalOverlay}>
+                <div style={styles.modal}>
+                  <div style={styles.modalHeader}>
+                    <h3 style={{ margin: 0 }}>
+                      {previewDoc.file?.originalName}
+                    </h3>
+
+                    <button
+                      onClick={() => setPreviewDoc(null)}
+                      style={styles.closeBtn}
+                    >
+                      Închide
+                    </button>
+                  </div>
+
+                  <iframe
+                    src={previewDoc.file?.url}
+                    title={previewDoc.file?.originalName}
+                    style={styles.previewFrame}
+                  />
+                </div>
+              </div>
+            )} 
       </main>
     </div>
   );
@@ -319,6 +361,63 @@ const styles = {
     padding: "10px 14px",
     cursor: "pointer",
     fontWeight: "bold",
+  },
+  //STYLE PREVIEW DOC
+  previewBtn: {
+    backgroundColor: "#2563eb",
+    color: "#fff",
+    border: "none",
+    borderRadius: "10px",
+    padding: "10px 14px",
+    cursor: "pointer",
+    fontWeight: "bold",
+  },
+
+  modalOverlay: {
+    position: "fixed",
+    inset: 0,
+    backgroundColor: "rgba(0,0,0,0.75)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1000,
+    padding: "30px",
+  },
+
+  modal: {
+    width: "90%",
+    height: "90%",
+    backgroundColor: "#111827",
+    border: "1px solid #334155",
+    borderRadius: "18px",
+    padding: "20px",
+    display: "flex",
+    flexDirection: "column",
+  },
+
+  modalHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: "16px",
+  },
+
+  closeBtn: {
+    backgroundColor: "#ef4444",
+    color: "#fff",
+    border: "none",
+    borderRadius: "10px",
+    padding: "10px 14px",
+    cursor: "pointer",
+    fontWeight: "bold",
+  },
+
+  previewFrame: {
+    flex: 1,
+    width: "100%",
+    border: "none",
+    borderRadius: "12px",
+    backgroundColor: "#fff",
   },
 };
 
