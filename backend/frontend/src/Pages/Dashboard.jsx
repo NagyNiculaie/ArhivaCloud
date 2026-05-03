@@ -177,43 +177,34 @@ function Dashboard() {
                   </div>
 
                   <div style={styles.docActions}>
-                    <a
-                      href={doc.file?.url.replace(
-                        "/upload/",
-                        "/upload/fl_attachment/"
-                      )}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={styles.docLink}
-                    
-                    >
-                 <button
-                      onClick={() => previewDocument(doc._id)}
-                      style={styles.previewBtn}
-                    >
-                      Preview
-                    </button>
+                        <a
+                          href={`${API_URL}/documents/${doc._id}/preview`}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={styles.previewBtn}
+                        >
+                          Preview
+                        </a>
 
-                    <a
-                      href={doc.file?.url.replace(
-                        "/upload/",
-                        "/upload/fl_attachment/"
-                      )}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={styles.docLink}
-                    ></a>
+                        <a
+                          href={doc.file?.url.replace(
+                            "/upload/",
+                            "/upload/fl_attachment/"
+                          )}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={styles.docLink}
+                        >
+                          Descarcă
+                        </a>
 
-                      Descarcă
-                    </a>
-
-                    <button
-                      onClick={() => deleteDocument(doc._id)}
-                      style={styles.deleteBtn}
-                    >
-                      Șterge
-                    </button>
-                  </div>
+                        <button
+                          onClick={() => deleteDocument(doc._id)}
+                          style={styles.deleteBtn}
+                        >
+                          Șterge
+                        </button>
+                      </div>
                 </div>
               ))}
             </div>

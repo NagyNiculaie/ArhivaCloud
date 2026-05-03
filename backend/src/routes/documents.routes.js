@@ -72,40 +72,22 @@ router.get("/:id", auth, async (req, res) => {
   res.json({ ok: true, document: doc });
 });
 // PREVIEW document (PDF)
-router.get("/:id/preview", auth, async (req, res) => {
+router.get("/:id/preview", async (req, res) =>  {
   try {
     const doc = await Document.findById(req.params.id);
 
     if (!doc) {
-      return res.status(404).json({
-        ok: false,
-        error: "Document inexistent.",
-      });
+      return res.status(404).json({ ok: false, error: "Document inexistent." });
     }
 
-    const fileUrl = doc.file?.url;
+    const response = await fetch(doc.file.url);
 
-    if (!fileUrl) {
-      return res.status(400).json({
-        ok: false,
-        error: "URL lipsă.",
-      });
-    }
-
-    // luam PDF-ul de pe Cloudinary
-    const response = await fetch(fileUrl);
-
-    // setam header corect pentru browser
     res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="${doc.file.originalName}"`);
 
-    // trimitem stream-ul catre frontend
     response.body.pipe(res);
-
   } catch (err) {
-    res.status(500).json({
-      ok: false,
-      error: err.message,
-    });
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 router.delete("/:id", auth, async (req, res) => {
