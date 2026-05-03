@@ -96,6 +96,26 @@ function Dashboard() {
     logout();
     navigate("/login");
   };
+  const previewDocument = async (id) => {
+  try {
+    const res = await axios.get(
+      `${API_URL}/documents/${id}/preview`,
+      {
+        headers: {
+          Authorization: `Bearer ${getToken()}`,
+        },
+        responseType: "blob",
+      }
+    );
+
+    const url = window.URL.createObjectURL(new Blob([res.data]));
+    window.open(url);
+
+  } catch (err) {
+    console.error("Preview error:", err);
+    setMessage("Eroare la preview.");
+  }
+};
 
   return (
     <div style={styles.page}>
@@ -168,9 +188,7 @@ function Dashboard() {
                     
                     >
                  <button
-                      onClick={() =>
-                        window.open(`${API_URL}/documents/${doc._id}/preview`, "_blank")
-                      }
+                      onClick={() => previewDocument(doc._id)}
                       style={styles.previewBtn}
                     >
                       Preview
