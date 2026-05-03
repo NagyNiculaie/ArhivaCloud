@@ -167,12 +167,18 @@ function Dashboard() {
                       style={styles.docLink}
                     
                     >
-                   <button
-                      onClick={() => setPreviewDoc(doc)}
-                      style={styles.previewBtn}
-                    >
-                      Preview
-                    </button>
+                 <button
+                        onClick={() => {
+                          if (doc.file?.mimeType === "application/pdf") {
+                            window.open(doc.file?.url, "_blank");
+                          } else {
+                            setPreviewDoc(doc);
+                          }
+                        }}
+                        style={styles.previewBtn}
+                      >
+                        Preview
+                      </button>
 
                     <a
                       href={doc.file?.url.replace(
