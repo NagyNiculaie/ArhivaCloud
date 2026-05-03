@@ -168,17 +168,13 @@ function Dashboard() {
                     
                     >
                  <button
-                        onClick={() => {
-                          if (doc.file?.mimeType === "application/pdf") {
-                            window.open(doc.file?.url, "_blank");
-                          } else {
-                            setPreviewDoc(doc);
-                          }
-                        }}
-                        style={styles.previewBtn}
-                      >
-                        Preview
-                      </button>
+                      onClick={() =>
+                        window.open(`${API_URL}/documents/${doc._id}/preview`, "_blank")
+                      }
+                      style={styles.previewBtn}
+                    >
+                      Preview
+                    </button>
 
                     <a
                       href={doc.file?.url.replace(

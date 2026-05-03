@@ -7,6 +7,7 @@ const { extractText } = require("../services/extractText.service");
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
+const fetch = require("node-fetch");
 
 // Upload document (PDF/JPG/PNG) + extract text + save in MongoDB
 router.post("/upload", auth, upload.single("file"), async (req, res) => {
@@ -69,6 +70,43 @@ router.get("/:id", auth, async (req, res) => {
       .json({ ok: false, error: "Document inexistent." });
   }
   res.json({ ok: true, document: doc });
+});
+// PREVIEW document (PDF)
+router.get("/:id/preview", auth, async (req, res) => {
+  try {
+    const doc = await Document.findById(req.params.id);
+
+    if (!doc) {
+      return res.status(404).json({
+        ok: false,
+        error: "Document inexistent.",
+      });
+    }
+
+    const fileUrl = doc.file?.url;
+
+    if (!fileUrl) {
+      return res.status(400).json({
+        ok: false,
+        error: "URL lipsă.",
+      });
+    }
+
+    // luam PDF-ul de pe Cloudinary
+    const response = await fetch(fileUrl);
+
+    // setam header corect pentru browser
+    res.setHeader("Content-Type", "application/pdf");
+
+    // trimitem stream-ul catre frontend
+    response.body.pipe(res);
+
+  } catch (err) {
+    res.status(500).json({
+      ok: false,
+      error: err.message,
+    });
+  }
 });
 router.delete("/:id", auth, async (req, res) => {
   try {
