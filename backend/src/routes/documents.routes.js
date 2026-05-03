@@ -7,7 +7,7 @@ const { extractText } = require("../services/extractText.service");
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
-const fetch = require("node-fetch");
+
 
 // Upload document (PDF/JPG/PNG) + extract text + save in MongoDB
 router.post("/upload", auth, upload.single("file"), async (req, res) => {
@@ -34,7 +34,7 @@ router.post("/upload", auth, upload.single("file"), async (req, res) => {
 
     const text = await extractText({
       buffer: req.file.buffer,
-      mimeType: req.file.mimetype,
+      mimeType: req.file.mimetype
     });
 
     const doc = await Document.create({
@@ -61,6 +61,27 @@ router.get("/", auth, async (req, res) => {
   res.json({ ok: true, documents: docs });
 });
 
+// Preview document
+router.get("/:id/preview", async (req, res) => {
+  try {
+    const doc = await Document.findById(req.params.id);
+
+    if (!doc) {
+      return res.status(404).json({
+        ok: false,
+        error: "Document inexistent.",
+      });
+    }
+
+    return res.redirect(doc.file.url);
+  } catch (err) {
+    res.status(500).json({
+      ok: false,
+      error: err.message,
+    });
+  }
+});
+
 // Get one document
 router.get("/:id", auth, async (req, res) => {
   const doc = await Document.findById(req.params.id);
@@ -70,36 +91,5 @@ router.get("/:id", auth, async (req, res) => {
       .json({ ok: false, error: "Document inexistent." });
   }
   res.json({ ok: true, document: doc });
-});
-// PREVIEW document (PDF)
-router.get("/:id/preview", async (req, res) =>  {
-  try {
-    const doc = await Document.findById(req.params.id);
-
-    if (!doc) {
-      return res.status(404).json({ ok: false, error: "Document inexistent." });
-    }
-
-    const response = await fetch(doc.file.url);
-
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `inline; filename="${doc.file.originalName}"`);
-
-    response.body.pipe(res);
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
-  }
-});
-router.get("/:id/preview", async (req, res) => {
-  try {
-    const doc = await Document.findById(req.params.id);
-
-    if (!doc) {
-      return res.status(404).json({ ok: false, error: "Document inexistent." });
-    }
-    return res.redirect(doc.file.url);
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
-  }
 });
 module.exports = router;
