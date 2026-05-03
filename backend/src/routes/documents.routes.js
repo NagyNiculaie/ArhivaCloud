@@ -90,7 +90,7 @@ router.get("/:id/preview", async (req, res) =>  {
     res.status(500).json({ ok: false, error: err.message });
   }
 });
-router.delete("/:id", auth, async (req, res) => {
+router.get("/:id/preview", auth, async (req, res) => {
   try {
     const doc = await Document.findById(req.params.id);
 
@@ -101,21 +101,9 @@ router.delete("/:id", auth, async (req, res) => {
       });
     }
 
-    if (doc.file?.publicId) {
-      const isPdf = doc.file?.mimeType === "application/pdf";
-      const resourceType = isPdf ? "raw" : "image";
+    // 🔥 REDIRECT direct către PDF
+    res.redirect(doc.file.url);
 
-      await cloudinary.uploader.destroy(doc.file.publicId, {
-        resource_type: resourceType,
-      });
-    }
-
-    await Document.findByIdAndDelete(req.params.id);
-
-    res.json({
-      ok: true,
-      message: "Document șters cu succes.",
-    });
   } catch (err) {
     res.status(500).json({
       ok: false,

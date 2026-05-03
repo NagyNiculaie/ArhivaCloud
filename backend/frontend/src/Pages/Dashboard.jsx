@@ -210,32 +210,6 @@ function Dashboard() {
             </div>
           )}
         </section>
-                  {previewDoc && (
-              <div style={styles.modalOverlay}>
-                <div style={styles.modal}>
-                  <div style={styles.modalHeader}>
-                    <h3 style={{ margin: 0 }}>
-                      {previewDoc.file?.originalName}
-                    </h3>
-
-                    <button
-                      onClick={() => setPreviewDoc(null)}
-                      style={styles.closeBtn}
-                    >
-                      Închide
-                    </button>
-                  </div>
-
-                 <iframe
-                      src={`https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(
-                        previewDoc.file?.url
-                      )}`}
-                      title={previewDoc.file?.originalName}
-                      style={styles.previewFrame}
-                    />
-                </div>
-              </div>
-            )} 
       </main>
     </div>
   );
