@@ -178,7 +178,7 @@ function Dashboard() {
 
                   <div style={styles.docActions}>
                         <a
-                          href={`${API_URL}/documents/${doc._id}/preview`}
+                          href={doc.file?.url}
                           target="_blank"
                           rel="noreferrer"
                           style={styles.previewBtn}
