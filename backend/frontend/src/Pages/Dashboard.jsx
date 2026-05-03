@@ -215,11 +215,13 @@ function Dashboard() {
                     </button>
                   </div>
 
-                  <iframe
-                    src={previewDoc.file?.url}
-                    title={previewDoc.file?.originalName}
-                    style={styles.previewFrame}
-                  />
+                 <iframe
+                      src={`https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(
+                        previewDoc.file?.url
+                      )}`}
+                      title={previewDoc.file?.originalName}
+                      style={styles.previewFrame}
+                    />
                 </div>
               </div>
             )} 
@@ -421,4 +423,4 @@ const styles = {
   },
 };
 
-export default Dashboard;
+export default Dashboard
