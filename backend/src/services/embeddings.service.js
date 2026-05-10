@@ -15,5 +15,8 @@ async function embedText(text) {
 
   return resp.data?.[0]?.embedding || [];
 }
+module.exports = {
+  embedText,
+  cosineSimilarity,
+};
 
-module.exports = { embedText };

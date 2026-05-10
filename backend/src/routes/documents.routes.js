@@ -4,6 +4,10 @@ const multer = require("multer");
 const supabase = require("../config/cloudinary");
 const Document = require("../models/Document");
 const { extractText } = require("../services/extractText.service");
+const {
+  embedText,
+  cosineSimilarity,
+} = require("../services/embeddings.service");
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -52,7 +56,7 @@ router.post("/upload", auth, upload.single("file"), async (req, res) => {
         publicId: filePath,
       },
       extractedText: text,
-      embedding: [],
+      embedding: await embedText(text),
     });
 
     res.json({ ok: true, document: doc });
@@ -129,6 +133,43 @@ router.delete("/:id", auth, async (req, res) => {
     res.json({
       ok: true,
       message: "Document șters cu succes.",
+    });
+  } catch (err) {
+    res.status(500).json({
+      ok: false,
+      error: err.message,
+    });
+  }
+});
+// Semantic search
+router.post("/semantic-search", auth, async (req, res) => {
+  try {
+    const { query } = req.body;
+
+    if (!query) {
+      return res.status(400).json({
+        ok: false,
+        error: "Lipsește query.",
+      });
+    }
+
+    const queryEmbedding = await embedText(query);
+
+    const docs = await Document.find({
+      embedding: { $exists: true, $ne: [] },
+    });
+
+    const results = docs
+      .map((doc) => ({
+        document: doc,
+        score: cosineSimilarity(queryEmbedding, doc.embedding),
+      }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5);
+
+    res.json({
+      ok: true,
+      results,
     });
   } catch (err) {
     res.status(500).json({
