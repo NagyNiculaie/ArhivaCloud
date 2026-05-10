@@ -8,7 +8,7 @@ const { extractText } = require("../services/extractText.service");
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
-const BUCKET_NAME = "documents";
+const BUCKET_NAME = "Documente";
 
 // Upload document
 router.post("/upload", auth, upload.single("file"), async (req, res) => {
