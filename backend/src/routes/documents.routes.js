@@ -1,40 +1,46 @@
 const auth = require("../middleware/auth");
 const express = require("express");
 const multer = require("multer");
-const cloudinary = require("../config/cloudinary");
+const supabase = require("../config/cloudinary");
 const Document = require("../models/Document");
 const { extractText } = require("../services/extractText.service");
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
+const BUCKET_NAME = "documents";
 
-// Upload document (PDF/JPG/PNG) + extract text + save in MongoDB
+// Upload document
 router.post("/upload", auth, upload.single("file"), async (req, res) => {
   try {
     if (!req.file) {
-      return res
-        .status(400)
-        .json({ ok: false, error: "Lipsește fișierul (field: file)." });
+      return res.status(400).json({
+        ok: false,
+        error: "Lipsește fișierul (field: file).",
+      });
     }
 
-    const isPdf = req.file.mimetype === "application/pdf";
-    const resourceType = isPdf ? "raw" : "image";
+    const safeName = req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const filePath = `${Date.now()}-${safeName}`;
 
-    const uploadResult = await new Promise((resolve, reject) => {
-      const stream = cloudinary.uploader.upload_stream(
-        {
-          folder: "arhiva-cloud",
-          resource_type: resourceType,
-        },
-        (err, result) => (err ? reject(err) : resolve(result))
-      );
-      stream.end(req.file.buffer);
-    });
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET_NAME)
+      .upload(filePath, req.file.buffer, {
+        contentType: req.file.mimetype,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      throw new Error(uploadError.message);
+    }
+
+    const { data: publicData } = supabase.storage
+      .from(BUCKET_NAME)
+      .getPublicUrl(filePath);
 
     const text = await extractText({
       buffer: req.file.buffer,
-      mimeType: req.file.mimetype
+      mimeType: req.file.mimetype,
     });
 
     const doc = await Document.create({
@@ -42,8 +48,8 @@ router.post("/upload", auth, upload.single("file"), async (req, res) => {
         originalName: req.file.originalname,
         mimeType: req.file.mimetype,
         size: req.file.size,
-        url: uploadResult.secure_url,
-        publicId: uploadResult.public_id,
+        url: publicData.publicUrl,
+        publicId: filePath,
       },
       extractedText: text,
       embedding: [],
@@ -85,13 +91,17 @@ router.get("/:id/preview", async (req, res) => {
 // Get one document
 router.get("/:id", auth, async (req, res) => {
   const doc = await Document.findById(req.params.id);
+
   if (!doc) {
-    return res
-      .status(404)
-      .json({ ok: false, error: "Document inexistent." });
+    return res.status(404).json({
+      ok: false,
+      error: "Document inexistent.",
+    });
   }
+
   res.json({ ok: true, document: doc });
 });
+
 // Delete document
 router.delete("/:id", auth, async (req, res) => {
   try {
@@ -105,12 +115,13 @@ router.delete("/:id", auth, async (req, res) => {
     }
 
     if (doc.file?.publicId) {
-      const isPdf = doc.file?.mimeType === "application/pdf";
-      const resourceType = isPdf ? "raw" : "image";
+      const { error: deleteError } = await supabase.storage
+        .from(BUCKET_NAME)
+        .remove([doc.file.publicId]);
 
-      await cloudinary.uploader.destroy(doc.file.publicId, {
-        resource_type: resourceType,
-      });
+      if (deleteError) {
+        throw new Error(deleteError.message);
+      }
     }
 
     await Document.findByIdAndDelete(req.params.id);
@@ -126,4 +137,5 @@ router.delete("/:id", auth, async (req, res) => {
     });
   }
 });
+
 module.exports = router;
