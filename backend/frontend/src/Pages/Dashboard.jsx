@@ -185,19 +185,6 @@ function Dashboard() {
                         >
                           Preview
                         </a>
-
-                        <a
-                          href={doc.file?.url.replace(
-                            "/upload/",
-                            "/upload/fl_attachment/"
-                          )}
-                          target="_blank"
-                          rel="noreferrer"
-                          style={styles.docLink}
-                        >
-                          Descarcă
-                        </a>
-
                         <button
                           onClick={() => deleteDocument(doc._id)}
                           style={styles.deleteBtn}
