@@ -17,6 +17,10 @@ function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [question, setQuestion] = useState("");
+  const [aiAnswer, setAiAnswer] = useState("");
+  const [aiSources, setAiSources] = useState([]);
+  const [askLoading, setAskLoading] = useState(false);
 
 
   const loadDocs = async () => {
@@ -113,6 +117,41 @@ function Dashboard() {
         },
       }
     );
+    const askDocuments = async () => {
+  try {
+    if (!question.trim()) {
+      setMessage("Scrie o întrebare.");
+      return;
+    }
+
+    setAskLoading(true);
+    setAiAnswer("");
+    setAiSources([]);
+
+    const res = await axios.post(
+      `${API_URL}/documents/ask`,
+      { question },
+      {
+        headers: {
+          Authorization: `Bearer ${getToken()}`,
+        },
+      }
+    );
+
+    setAiAnswer(res.data.answer || "");
+    setAiSources(res.data.sources || []);
+
+  } catch (err) {
+    console.error("Ask AI error:", err);
+
+    setMessage(
+      "Eroare AI: " +
+        (err.response?.data?.error || err.message)
+    );
+  } finally {
+    setAskLoading(false);
+  }
+};
 
     setSearchResults(res.data.results || []);
     setMessage("Căutare finalizată.");
@@ -233,6 +272,72 @@ function Dashboard() {
           </a>
         </div>
       ))}
+    </div>
+  )}
+</section>
+//documentele mele
+<section style={styles.askCard}>
+  <h3 style={styles.sectionTitle}>
+    Întreabă documentele tale
+  </h3>
+
+  <div style={styles.searchRow}>
+    <input
+      type="text"
+      placeholder="Ex: Care este valoarea totală din factura Vodafone?"
+      value={question}
+      onChange={(e) => setQuestion(e.target.value)}
+      style={styles.searchInput}
+    />
+
+    <button
+      onClick={askDocuments}
+      disabled={askLoading}
+      style={styles.primaryBtn}
+    >
+      {askLoading ? "Se analizează..." : "Întreabă"}
+    </button>
+  </div>
+
+  {aiAnswer && (
+    <div style={styles.aiAnswerBox}>
+      <h4 style={{ marginTop: 0 }}>
+        Răspuns AI
+      </h4>
+
+      <p style={styles.aiAnswerText}>
+        {aiAnswer}
+      </p>
+
+      {aiSources.length > 0 && (
+        <div style={{ marginTop: "18px" }}>
+          <strong>Surse utilizate:</strong>
+
+          <div style={styles.resultsBox}>
+            {aiSources.map((source) => (
+              <div
+                key={source.id}
+                style={styles.resultItem}
+              >
+                <strong>{source.fileName}</strong>
+
+                <p style={styles.docMeta}>
+                  Relevanță: {source.score.toFixed(3)}
+                </p>
+
+                <a
+                  href={source.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={styles.previewBtn}
+                >
+                  Preview
+                </a>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )}
 </section>
@@ -507,6 +612,27 @@ resultItem: {
   border: "1px solid #1e293b",
   borderRadius: "14px",
   padding: "16px",
+},
+askCard: {
+  backgroundColor: "#111827",
+  border: "1px solid #1f2937",
+  borderRadius: "18px",
+  padding: "24px",
+  marginBottom: "24px",
+},
+
+aiAnswerBox: {
+  marginTop: "20px",
+  backgroundColor: "#0f172a",
+  border: "1px solid #1e293b",
+  borderRadius: "14px",
+  padding: "20px",
+},
+
+aiAnswerText: {
+  color: "#e2e8f0",
+  lineHeight: 1.7,
+  whiteSpace: "pre-wrap",
 },
 };
 
