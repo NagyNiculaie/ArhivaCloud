@@ -14,7 +14,10 @@ function Dashboard() {
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
-  const [previewDoc, setPreviewDoc] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+
 
   const loadDocs = async () => {
     try {
@@ -91,6 +94,37 @@ function Dashboard() {
       );
     }
   };
+  const semanticSearch = async () => {
+  try {
+    if (!searchQuery.trim()) {
+      setMessage("Scrie ceva pentru căutare.");
+      return;
+    }
+
+    setSearchLoading(true);
+    setMessage("Se caută semantic...");
+
+    const res = await axios.post(
+      `${API_URL}/documents/semantic-search`,
+      { query: searchQuery },
+      {
+        headers: {
+          Authorization: `Bearer ${getToken()}`,
+        },
+      }
+    );
+
+    setSearchResults(res.data.results || []);
+    setMessage("Căutare finalizată.");
+  } catch (err) {
+    console.error("Eroare semantic search:", err);
+    setMessage(
+      "Eroare la căutare: " + (err.response?.data?.error || err.message)
+    );
+  } finally {
+    setSearchLoading(false);
+  }
+};
 
   const handleLogout = () => {
     logout();
@@ -159,6 +193,49 @@ function Dashboard() {
 
           {message && <p style={styles.message}>{message}</p>}
         </section>
+        <section style={styles.searchCard}>
+  <h3 style={styles.sectionTitle}>Căutare semantică AI</h3>
+
+  <div style={styles.searchRow}>
+    <input
+      type="text"
+      placeholder="Ex: document despre matematică, simulare, cerințe..."
+      value={searchQuery}
+      onChange={(e) => setSearchQuery(e.target.value)}
+      style={styles.searchInput}
+    />
+
+    <button
+      onClick={semanticSearch}
+      disabled={searchLoading}
+      style={styles.primaryBtn}
+    >
+      {searchLoading ? "Caută..." : "Caută AI"}
+    </button>
+  </div>
+
+  {searchResults.length > 0 && (
+    <div style={styles.resultsBox}>
+      {searchResults.map((item) => (
+        <div key={item.document._id} style={styles.resultItem}>
+          <strong>{item.document.file?.originalName}</strong>
+          <p style={styles.docMeta}>
+            Scor relevanță: {item.score.toFixed(3)}
+          </p>
+
+          <a
+            href={item.document.file?.url}
+            target="_blank"
+            rel="noreferrer"
+            style={styles.previewBtn}
+          >
+            Preview
+          </a>
+        </div>
+      ))}
+    </div>
+  )}
+</section>
 
         <section style={styles.docsSection}>
           <h3 style={styles.sectionTitle}>Documentele mele</h3>
@@ -393,6 +470,44 @@ const styles = {
     borderRadius: "12px",
     backgroundColor: "#fff",
   },
+  searchCard: {
+  backgroundColor: "#111827",
+  border: "1px solid #1f2937",
+  borderRadius: "18px",
+  padding: "24px",
+  marginBottom: "24px",
+},
+
+searchRow: {
+  display: "flex",
+  gap: "12px",
+  alignItems: "center",
+  flexWrap: "wrap",
+},
+
+searchInput: {
+  flex: 1,
+  minWidth: "260px",
+  padding: "12px 14px",
+  borderRadius: "12px",
+  border: "1px solid #334155",
+  backgroundColor: "#0f172a",
+  color: "#fff",
+  outline: "none",
+},
+
+resultsBox: {
+  marginTop: "18px",
+  display: "grid",
+  gap: "12px",
+},
+
+resultItem: {
+  backgroundColor: "#0f172a",
+  border: "1px solid #1e293b",
+  borderRadius: "14px",
+  padding: "16px",
+},
 };
 
 export default Dashboard
