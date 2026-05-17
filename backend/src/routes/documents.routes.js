@@ -91,16 +91,18 @@ router.post("/upload", auth, upload.single("file"), async (req, res) => {
     console.log("CHUNKS CREATED:", chunks.length);
 
     for (let i = 0; i < chunks.length; i++) {
-      const chunkEmbedding = await embedText(chunks[i]);
+  const chunkEmbedding = await embedText(chunks[i]);
 
-      await DocumentChunk.create({
-        owner: req.user.userId,
-        document: doc._id,
-        chunkIndex: i,
-        text: chunks[i],
-        embedding: chunkEmbedding,
-      });
-    }
+  const createdChunk = await DocumentChunk.create({
+    owner: req.user.userId,
+    document: doc._id,
+    chunkIndex: i,
+    text: chunks[i],
+    embedding: chunkEmbedding,
+  });
+
+  console.log("CHUNK SAVED:", createdChunk._id.toString());
+}
 
     res.json({
       ok: true,
