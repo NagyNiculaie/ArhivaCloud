@@ -25,7 +25,7 @@ router.post("/upload", auth, upload.single("file"), async (req, res) => {
     }
 
     const safeName = req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const filePath = `${Date.now()}-${safeName}`;
+    const filePath = `${req.user.userId}/${Date.now()}-${safeName}`;
 
     const { error: uploadError } = await supabase.storage
       .from(BUCKET_NAME)
@@ -48,6 +48,8 @@ router.post("/upload", auth, upload.single("file"), async (req, res) => {
     });
 
     const doc = await Document.create({
+      owner: req.user.userId,
+
       file: {
         originalName: req.file.originalname,
         mimeType: req.file.mimetype,
@@ -55,6 +57,7 @@ router.post("/upload", auth, upload.single("file"), async (req, res) => {
         url: publicData.publicUrl,
         publicId: filePath,
       },
+
       extractedText: text,
       embedding: await embedText(text),
     });
@@ -65,13 +68,20 @@ router.post("/upload", auth, upload.single("file"), async (req, res) => {
   }
 });
 
-// List documents
+// List documents - doar documentele userului logat
 router.get("/", auth, async (req, res) => {
-  const docs = await Document.find().sort({ createdAt: -1 }).limit(50);
-  res.json({ ok: true, documents: docs });
+  try {
+    const docs = await Document.find({ owner: req.user.userId })
+      .sort({ createdAt: -1 })
+      .limit(50);
+
+    res.json({ ok: true, documents: docs });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
-// Preview document
+// Preview document - doar dacă documentul aparține userului
 router.get("/:id/preview", async (req, res) => {
   try {
     const doc = await Document.findById(req.params.id);
@@ -94,22 +104,32 @@ router.get("/:id/preview", async (req, res) => {
 
 // Get one document
 router.get("/:id", auth, async (req, res) => {
-  const doc = await Document.findById(req.params.id);
-
-  if (!doc) {
-    return res.status(404).json({
-      ok: false,
-      error: "Document inexistent.",
+  try {
+    const doc = await Document.findOne({
+      _id: req.params.id,
+      owner: req.user.userId,
     });
-  }
 
-  res.json({ ok: true, document: doc });
+    if (!doc) {
+      return res.status(404).json({
+        ok: false,
+        error: "Document inexistent.",
+      });
+    }
+
+    res.json({ ok: true, document: doc });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
 // Delete document
 router.delete("/:id", auth, async (req, res) => {
   try {
-    const doc = await Document.findById(req.params.id);
+    const doc = await Document.findOne({
+      _id: req.params.id,
+      owner: req.user.userId,
+    });
 
     if (!doc) {
       return res.status(404).json({
@@ -128,7 +148,10 @@ router.delete("/:id", auth, async (req, res) => {
       }
     }
 
-    await Document.findByIdAndDelete(req.params.id);
+    await Document.deleteOne({
+      _id: req.params.id,
+      owner: req.user.userId,
+    });
 
     res.json({
       ok: true,
@@ -141,7 +164,8 @@ router.delete("/:id", auth, async (req, res) => {
     });
   }
 });
-// Semantic search
+
+// Semantic search - doar în documentele userului logat
 router.post("/semantic-search", auth, async (req, res) => {
   try {
     const { query } = req.body;
@@ -156,6 +180,7 @@ router.post("/semantic-search", auth, async (req, res) => {
     const queryEmbedding = await embedText(query);
 
     const docs = await Document.find({
+      owner: req.user.userId,
       embedding: { $exists: true, $ne: [] },
     });
 

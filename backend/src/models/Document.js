@@ -2,9 +2,10 @@ const mongoose = require("mongoose");
 
 const DocumentSchema = new mongoose.Schema(
   {
-    ownerId: {
-      type: String,
-      default: "demo-user"
+    owner: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
     },
 
     file: {
@@ -17,13 +18,13 @@ const DocumentSchema = new mongoose.Schema(
 
     extractedText: {
       type: String,
-      default: ""
+      default: "",
     },
 
     embedding: {
       type: [Number],
-      default: []
-    }
+      default: [],
+    },
   },
   { timestamps: true }
 );
