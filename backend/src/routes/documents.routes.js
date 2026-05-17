@@ -47,25 +47,30 @@ router.post("/upload", auth, upload.single("file"), async (req, res) => {
       .from(BUCKET_NAME)
       .getPublicUrl(filePath);
 
-    const text = await extractText({
-      buffer: req.file.buffer,
-      mimeType: req.file.mimetype,
-    });
+   const text = await extractText({
+  buffer: req.file.buffer,
+  mimeType: req.file.mimetype,
+});
 
-    const doc = await Document.create({
-      owner: req.user.userId,
+const embedding = await embedText(text);
 
-      file: {
-        originalName: req.file.originalname,
-        mimeType: req.file.mimetype,
-        size: req.file.size,
-        url: publicData.publicUrl,
-        publicId: filePath,
-      },
+console.log("TEXT EXTRAS LENGTH:", text.length);
+console.log("EMBEDDING LENGTH:", embedding.length);
 
-      extractedText: text,
-      embedding: await embedText(text),
-    });
+const doc = await Document.create({
+  owner: req.user.userId,
+
+  file: {
+    originalName: req.file.originalname,
+    mimeType: req.file.mimetype,
+    size: req.file.size,
+    url: publicData.publicUrl,
+    publicId: filePath,
+  },
+
+  extractedText: text,
+  embedding,
+});
 
     res.json({ ok: true, document: doc });
   } catch (e) {
