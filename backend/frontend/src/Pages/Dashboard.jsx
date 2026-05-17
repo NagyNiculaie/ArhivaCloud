@@ -194,12 +194,12 @@ function Dashboard() {
           {message && <p style={styles.message}>{message}</p>}
         </section>
         <section style={styles.searchCard}>
-  <h3 style={styles.sectionTitle}>Căutare semantică AI</h3>
+  <h3 style={styles.sectionTitle}>Cautare inteligenta cu IA</h3>
 
   <div style={styles.searchRow}>
     <input
       type="text"
-      placeholder="Ex: document despre matematică, simulare, cerințe..."
+      placeholder="Caută după conținut: facturi, contracte, plăți, sume, furnizori..."
       value={searchQuery}
       onChange={(e) => setSearchQuery(e.target.value)}
       style={styles.searchInput}
