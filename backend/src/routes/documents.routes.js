@@ -8,6 +8,11 @@ const {
   embedText,
   cosineSimilarity,
 } = require("../services/embeddings.service");
+const OpenAI = require("openai");
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -195,6 +200,95 @@ router.post("/semantic-search", auth, async (req, res) => {
     res.json({
       ok: true,
       results,
+    });
+  } catch (err) {
+    res.status(500).json({
+      ok: false,
+      error: err.message,
+    });
+  }
+});
+// Ask AI about user's documents
+router.post("/ask", auth, async (req, res) => {
+  try {
+    const { question } = req.body;
+
+    if (!question || !question.trim()) {
+      return res.status(400).json({
+        ok: false,
+        error: "Lipsește întrebarea.",
+      });
+    }
+
+    const questionEmbedding = await embedText(question);
+
+    const docs = await Document.find({
+      owner: req.user.userId,
+      embedding: { $exists: true, $ne: [] },
+    });
+
+    if (docs.length === 0) {
+      return res.json({
+        ok: true,
+        answer:
+          "Nu am găsit documente procesate pentru acest cont. Încarcă un document nou pentru a putea pune întrebări pe baza lui.",
+        sources: [],
+      });
+    }
+
+    const rankedDocs = docs
+      .map((doc) => ({
+        doc,
+        score: cosineSimilarity(questionEmbedding, doc.embedding),
+      }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3);
+
+    const context = rankedDocs
+      .map((item, index) => {
+        const text = item.doc.extractedText || "";
+
+        return `
+DOCUMENT ${index + 1}
+Nume fișier: ${item.doc.file?.originalName}
+Scor relevanță: ${item.score.toFixed(3)}
+Text extras:
+${text.slice(0, 6000)}
+`;
+      })
+      .join("\n\n");
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content:
+            "Ești un asistent pentru analizarea documentelor financiare. Răspunde strict pe baza contextului primit. Dacă informația nu există în documente, spune clar că nu ai găsit-o. Răspunde în română, concis și organizat.",
+        },
+        {
+          role: "user",
+          content: `
+Întrebare:
+${question}
+
+Context din documentele utilizatorului:
+${context}
+`,
+        },
+      ],
+      temperature: 0.2,
+    });
+
+    res.json({
+      ok: true,
+      answer: completion.choices[0].message.content,
+      sources: rankedDocs.map((item) => ({
+        id: item.doc._id,
+        fileName: item.doc.file?.originalName,
+        score: item.score,
+        url: item.doc.file?.url,
+      })),
     });
   } catch (err) {
     res.status(500).json({
