@@ -733,7 +733,7 @@ function Dashboard() {
         <div style={styles.header}>
           <h1 style={styles.title}>Arhiva ta inteligenta!</h1>
           <p style={styles.subtitle}>
-            Încarcă, analizează și organizează automat documentele contabile cu ajutorul AI.
+            Încarcă, analizează și organizează automat documentele financiare cu ajutorul AI.
           </p>
         </div>
 
