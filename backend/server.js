@@ -8,17 +8,15 @@ const searchRoutes = require("./src/routes/search.routes");
 
 const app = express();
 
-const allowedOrigins = [
-  "http://localhost:5173",
-  "http://localhost:3000",
-  "https://arhiva-cloud-frontend.vercel.app",
-];
+console.log("✅ SERVER VERSION: CORS FIX ACTIVE");
 
-// CORS manual - pus înainte de toate rutele
+// CORS manual - înainte de orice rută
 app.use((req, res, next) => {
   const origin = req.headers.origin;
 
-  if (allowedOrigins.includes(origin)) {
+  console.log("CORS REQUEST:", req.method, req.url, "ORIGIN:", origin);
+
+  if (origin) {
     res.setHeader("Access-Control-Allow-Origin", origin);
   }
 
@@ -26,15 +24,15 @@ app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Credentials", "true");
   res.setHeader(
     "Access-Control-Allow-Methods",
-    "GET, POST, PUT, DELETE, OPTIONS"
+    "GET,POST,PUT,DELETE,OPTIONS"
   );
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, Authorization"
+    "Content-Type, Authorization, X-Requested-With"
   );
 
   if (req.method === "OPTIONS") {
-    return res.sendStatus(204);
+    return res.status(204).end();
   }
 
   next();
@@ -43,7 +41,7 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: "10mb" }));
 
 app.get("/", (req, res) => {
-  res.send("API Arhiva Cloud funcționează ✅");
+  res.send("API Arhiva Cloud funcționează ✅ - CORS FIX ACTIVE");
 });
 
 app.use("/auth", authRoutes);
