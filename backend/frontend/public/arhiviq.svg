@@ -1,0 +1,122 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="60" y1="40" x2="460" y2="480" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0F172A"/>
+      <stop offset="0.55" stop-color="#111827"/>
+      <stop offset="1" stop-color="#020617"/>
+    </linearGradient>
+
+    <linearGradient id="blue" x1="110" y1="80" x2="400" y2="350" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#38BDF8"/>
+      <stop offset="0.5" stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+
+    <linearGradient id="textGradient" x1="115" y1="330" x2="400" y2="330" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#38BDF8"/>
+    </linearGradient>
+
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feColorMatrix
+        in="blur"
+        type="matrix"
+        values="0 0 0 0 0.15
+                0 0 0 0 0.55
+                0 0 0 0 1
+                0 0 0 0.9 0"
+        result="glow"
+      />
+      <feMerge>
+        <feMergeNode in="glow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect x="24" y="24" width="464" height="464" rx="96" fill="url(#bg)"/>
+  <rect x="30" y="30" width="452" height="452" rx="90" stroke="url(#blue)" stroke-width="6" opacity="0.9"/>
+
+  <path
+    d="M162 185C162 151 190 123 224 123C248 123 269 136 280 155C288 152 297 150 306 150C339 150 366 177 366 210H364C390 213 411 235 411 262C411 291 387 315 358 315H154C123 315 98 290 98 259C98 229 121 204 151 203C154 197 157 191 162 185Z"
+    stroke="url(#blue)"
+    stroke-width="16"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    opacity="0.95"
+    filter="url(#glow)"
+  />
+
+  <path
+    d="M121 205C121 191 132 180 146 180H212L235 204H366C381 204 393 216 393 231V320C393 336 380 349 364 349H148C133 349 121 337 121 322V205Z"
+    fill="#0B3B89"
+    stroke="#38BDF8"
+    stroke-width="5"
+  />
+
+  <path
+    d="M121 238H393V322C393 337 381 349 366 349H148C133 349 121 337 121 322V238Z"
+    fill="url(#blue)"
+    opacity="0.95"
+  />
+
+  <path
+    d="M205 100H296L338 142V247C338 260 328 270 315 270H205C192 270 182 260 182 247V123C182 110 192 100 205 100Z"
+    fill="#E5F2FF"
+  />
+  <path d="M296 100V142H338" fill="#BFDBFE"/>
+
+  <path d="M215 154H285" stroke="#1D4ED8" stroke-width="9" stroke-linecap="round"/>
+  <path d="M215 184H306" stroke="#1D4ED8" stroke-width="9" stroke-linecap="round"/>
+  <path d="M215 214H278" stroke="#1D4ED8" stroke-width="9" stroke-linecap="round"/>
+
+  <path
+    d="M393 254H432M432 254L450 236M432 254L450 272"
+    stroke="#38BDF8"
+    stroke-width="7"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <circle cx="454" cy="236" r="8" fill="#38BDF8"/>
+  <circle cx="454" cy="272" r="8" fill="#38BDF8"/>
+
+  <text
+    x="256"
+    y="316"
+    text-anchor="middle"
+    font-family="Arial, Helvetica, sans-serif"
+    font-size="92"
+    font-weight="900"
+    fill="white"
+    letter-spacing="-8"
+  >
+    NN
+  </text>
+
+  <text
+    x="256"
+    y="405"
+    text-anchor="middle"
+    font-family="Arial, Helvetica, sans-serif"
+    font-size="58"
+    font-weight="900"
+    fill="url(#textGradient)"
+  >
+    ArhivIQ
+  </text>
+
+  <text
+    x="256"
+    y="445"
+    text-anchor="middle"
+    font-family="Arial, Helvetica, sans-serif"
+    font-size="26"
+    font-weight="700"
+    fill="#60A5FA"
+    letter-spacing="2"
+  >
+    Nagy Niculaie
+  </text>
+</svg>
