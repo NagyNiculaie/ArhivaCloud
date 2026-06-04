@@ -387,6 +387,36 @@ function Dashboard() {
     }
   };
 
+
+  const reprocessDocument = async (id) => {
+    try {
+      setMessage("Reprocesarea documentului a pornit...");
+
+      const res = await axios.post(
+        `${API_URL}/documents/${id}/reprocess`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${getToken()}`,
+          },
+        }
+      );
+
+      setMessage(
+        res.data.message ||
+          "Reprocesarea a pornit. Documentul se actualizează automat."
+      );
+
+      await loadDocs();
+    } catch (err) {
+      console.error("Eroare la reprocesare:", err);
+      setMessage(
+        "Eroare la reprocesare: " +
+          (err.response?.data?.error || err.message)
+      );
+    }
+  };
+
   const handleLogout = () => {
     logout();
     navigate("/login");
@@ -896,6 +926,19 @@ function Dashboard() {
                       </a>
 
                       <button
+                        onClick={() => reprocessDocument(doc._id)}
+                        style={styles.reprocessBtn}
+                        disabled={doc.processingStatus === "processing"}
+                        title={
+                          doc.processingStatus === "processing"
+                            ? "Documentul se procesează deja"
+                            : "Rulează din nou OCR, clasificare și indexare"
+                        }
+                      >
+                        Reprocesează IA
+                      </button>
+
+                      <button
                         onClick={() => deleteDocument(doc._id)}
                         style={styles.deleteBtn}
                       >
@@ -1401,6 +1444,17 @@ const styles = {
     cursor: "pointer",
     fontWeight: "bold",
     textDecoration: "none",
+  },
+
+
+  reprocessBtn: {
+    backgroundColor: "#7c3aed",
+    color: "#fff",
+    border: "none",
+    borderRadius: "10px",
+    padding: "10px 14px",
+    cursor: "pointer",
+    fontWeight: "bold",
   },
 
   deleteBtn: {

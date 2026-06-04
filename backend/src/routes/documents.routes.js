@@ -568,6 +568,98 @@ router.get("/", auth, async (req, res) => {
   }
 });
 
+
+// Reprocesează document cu IA - util pentru documente eșuate sau clasificate greșit
+router.post("/:id/reprocess", auth, async (req, res) => {
+  try {
+    const doc = await Document.findOne({
+      _id: req.params.id,
+      owner: req.user.userId,
+    });
+
+    if (!doc) {
+      return res.status(404).json({
+        ok: false,
+        error: "Document inexistent.",
+      });
+    }
+
+    if (doc.processingStatus === "processing") {
+      return res.status(409).json({
+        ok: false,
+        error: "Documentul se procesează deja. Așteaptă finalizarea procesării curente.",
+      });
+    }
+
+    if (!doc.file?.publicId) {
+      return res.status(400).json({
+        ok: false,
+        error: "Documentul nu are publicId pentru fișierul din storage.",
+      });
+    }
+
+    console.log("REPROCESS START:", doc._id.toString(), doc.file.originalName);
+
+    const { data: fileData, error: downloadError } = await supabase.storage
+      .from(BUCKET_NAME)
+      .download(doc.file.publicId);
+
+    if (downloadError) {
+      console.error("SUPABASE DOWNLOAD ERROR:", downloadError);
+      throw new Error(downloadError.message);
+    }
+
+    const arrayBuffer = await fileData.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    await Document.findOneAndUpdate(
+      {
+        _id: doc._id,
+        owner: req.user.userId,
+      },
+      {
+        processingStatus: "processing",
+        processingError: "",
+        processedAt: null,
+        classificationStatus: "pending",
+        aiSummary: "Documentul este reprocessat cu IA.",
+      }
+    );
+
+    await DocumentChunk.deleteMany({
+      document: doc._id,
+      owner: req.user.userId,
+    });
+
+    res.status(202).json({
+      ok: true,
+      documentId: doc._id,
+      processing: true,
+      message:
+        "Reprocesarea a pornit. OCR-ul, clasificarea și indexarea rulează în fundal.",
+    });
+
+    setImmediate(() => {
+      processDocumentInBackground({
+        documentId: doc._id,
+        owner: req.user.userId,
+        buffer,
+        mimeType: doc.file.mimeType,
+        fileName: doc.file.originalName,
+      }).catch((error) => {
+        console.error("UNHANDLED REPROCESS BACKGROUND ERROR:", error);
+      });
+    });
+  } catch (err) {
+    console.error("REPROCESS ERROR:", err);
+
+    res.status(500).json({
+      ok: false,
+      error: err.message,
+    });
+  }
+});
+
 // Preview document
 router.get("/:id/preview", async (req, res) => {
   try {
