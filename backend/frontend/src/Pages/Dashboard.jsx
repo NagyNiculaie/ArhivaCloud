@@ -731,9 +731,9 @@ function Dashboard() {
 
       <main style={styles.main}>
         <div style={styles.header}>
-          <h1 style={styles.title}>Dashboard documente</h1>
+          <h1 style={styles.title}>Arhiva ta inteligenta!</h1>
           <p style={styles.subtitle}>
-            Încarcă, gestionează și accesează documentele tale.
+            Încarcă, analizează și organizează automat documentele contabile cu ajutorul AI.
           </p>
         </div>
 
