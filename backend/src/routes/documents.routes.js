@@ -5,6 +5,7 @@ const supabase = require("../config/supabase");
 const Document = require("../models/Document");
 const DocumentChunk = require("../models/DocumentChunk");
 const { extractText } = require("../services/extractText.service");
+const { classifyDocument } = require("../services/classifyDocument.service");
 const {
   embedText,
   cosineSimilarity,
@@ -158,6 +159,15 @@ router.post("/upload", auth, upload.single("file"), async (req, res) => {
       });
     }
 
+    console.log("CLASSIFYING DOCUMENT...");
+
+    const classification = await classifyDocument({
+      text,
+      fileName: req.file.originalname,
+    });
+
+    console.log("DOCUMENT CLASSIFICATION:", classification);
+
     const doc = await Document.create({
       owner: req.user.userId,
 
@@ -170,6 +180,18 @@ router.post("/upload", auth, upload.single("file"), async (req, res) => {
       },
 
       extractedText: text,
+
+      category: classification.category,
+      documentDate: classification.documentDate,
+      year: classification.year,
+      month: classification.month,
+      supplier: classification.supplier,
+      totalAmount: classification.totalAmount,
+      currency: classification.currency,
+      tags: classification.tags,
+      aiSummary: classification.aiSummary,
+      classificationConfidence: classification.classificationConfidence,
+      classificationStatus: classification.classificationStatus,
     });
 
     console.log("DOCUMENT SAVED:", doc._id.toString());
@@ -411,6 +433,13 @@ router.post("/ask", auth, async (req, res) => {
 
         const searchableText = `
           ${document.file?.originalName || ""}
+          ${document.category || ""}
+          ${document.supplier || ""}
+          ${document.year || ""}
+          ${document.month || ""}
+          ${document.totalAmount || ""}
+          ${document.currency || ""}
+          ${(document.tags || []).join(" ")}
           ${chunk.text || ""}
         `;
 
@@ -460,6 +489,18 @@ router.post("/ask", auth, async (req, res) => {
         return `
 FRAGMENT ${index + 1}
 Document: ${item.document.file?.originalName}
+Categorie: ${item.document.category || "necunoscut"}
+Furnizor: ${item.document.supplier || "necunoscut"}
+Data document: ${
+          item.document.documentDate
+            ? item.document.documentDate.toISOString().slice(0, 10)
+            : "necunoscut"
+        }
+An: ${item.document.year || "necunoscut"}
+Lună: ${item.document.month || "necunoscut"}
+Total: ${item.document.totalAmount ?? "necunoscut"} ${
+          item.document.currency || ""
+        }
 Fragment index: ${item.chunk.chunkIndex}
 Scor final: ${item.score.toFixed(3)}
 Scor semantic: ${item.semanticScore.toFixed(3)}
@@ -477,7 +518,7 @@ ${item.chunk.text}
         {
           role: "system",
           content:
-            "Ești un asistent AI pentru analizarea documentelor încărcate de utilizator. Răspunde strict pe baza fragmentelor primite. Dacă informația nu există în fragmente, spune clar că nu ai găsit-o. Răspunde în română, clar și organizat. Utilizatorul poate cere căutări de tip: facturi după furnizor, facturi după sumă, facturi după dată, comparații între facturi, totaluri sau extragere de date. Dacă întrebarea este despre facturi sau documente financiare, încearcă să extragi pentru fiecare document relevant: furnizorul, numărul facturii, data, scadența dacă există, totalul fără TVA dacă există, TVA-ul dacă există, totalul de plată și moneda. Dacă sunt mai multe documente relevante, fă întâi analiza pe fiecare document, apoi o sinteză finală. Dacă utilizatorul cere calcule și datele există în fragmente, calculează rezultatul. Nu inventa valori care nu apar în fragmente.",
+            "Ești un asistent AI pentru analizarea documentelor încărcate de utilizator. Răspunde strict pe baza fragmentelor și metadatelor primite. Dacă informația nu există în fragmente, spune clar că nu ai găsit-o. Răspunde în română, clar și organizat. Utilizatorul poate cere căutări de tip: facturi după furnizor, facturi după sumă, facturi după dată, comparații între facturi, totaluri sau extragere de date. Dacă întrebarea este despre facturi sau documente financiare, încearcă să extragi pentru fiecare document relevant: categoria, furnizorul, numărul facturii dacă apare, data, scadența dacă există, totalul fără TVA dacă există, TVA-ul dacă există, totalul de plată și moneda. Dacă sunt mai multe documente relevante, fă întâi analiza pe fiecare document, apoi o sinteză finală. Dacă utilizatorul cere calcule și datele există în fragmente sau metadate, calculează rezultatul. Nu inventa valori care nu apar în fragmente sau metadate.",
         },
         {
           role: "user",
@@ -509,6 +550,12 @@ ${context}
           fileName: item.document.file?.originalName,
           url: item.document.file?.url,
           score: item.score,
+          category: item.document.category,
+          supplier: item.document.supplier,
+          year: item.document.year,
+          month: item.document.month,
+          totalAmount: item.document.totalAmount,
+          currency: item.document.currency,
         });
       }
     }
