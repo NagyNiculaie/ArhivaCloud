@@ -809,9 +809,15 @@ function Dashboard() {
               </p>
             </div>
 
-            <button style={styles.secondaryBtn} onClick={loadDocs}>
-              Reîncarcă
-            </button>
+            <div style={styles.docsHeaderActions}>
+              <button style={styles.exportBtn} onClick={exportDocumentsToCsv}>
+                Export CSV
+              </button>
+
+              <button style={styles.secondaryBtn} onClick={loadDocs}>
+                Reîncarcă
+              </button>
+            </div>
           </div>
 
           <div style={styles.filtersCard}>
@@ -893,70 +899,7 @@ function Dashboard() {
                 const isProcessing = doc.processingStatus === "processing";
                 const hasFailed = doc.processingStatus === "failed";
 
-              
-  const exportDocumentsToCsv = () => {
-    if (filteredDocs.length === 0) {
-      setMessage("Nu există documente de exportat pentru filtrele selectate.");
-      return;
-    }
-
-    const headers = [
-      "Nume fișier",
-      "Categorie",
-      "Status procesare",
-      "Status clasificare",
-      "Furnizor",
-      "Data document",
-      "An",
-      "Lună",
-      "Total",
-      "Monedă",
-      "Rezumat IA",
-      "Taguri",
-      "URL document",
-    ];
-
-    const rows = filteredDocs.map((doc) => [
-      doc.file?.originalName || "",
-      formatCategory(doc.category),
-      formatProcessingStatus(doc.processingStatus),
-      doc.classificationStatus || "",
-      doc.supplier || "",
-      formatDate(doc.documentDate),
-      doc.year || "",
-      doc.month ? MONTH_LABELS[doc.month] || doc.month : "",
-      typeof doc.totalAmount === "number" ? doc.totalAmount : "",
-      doc.currency || "",
-      doc.aiSummary || "",
-      Array.isArray(doc.tags) ? doc.tags.join(", ") : "",
-      doc.file?.url || "",
-    ]);
-
-    const csvContent = [headers, ...rows]
-      .map((row) => row.map(csvEscape).join(";"))
-      .join("\n");
-
-    const blob = new Blob(["\ufeff" + csvContent], {
-      type: "text/csv;charset=utf-8;",
-    });
-
-    const today = new Date().toISOString().slice(0, 10);
-    const fileName = `arhiva-documente-${today}.csv`;
-    const url = URL.createObjectURL(blob);
-
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    URL.revokeObjectURL(url);
-
-    setMessage(`Export CSV generat: ${filteredDocs.length} document(e).`);
-  };
-
-  return (
+                return (
                   <div key={doc._id} style={styles.docCard}>
                     <div>
                       <div style={styles.cardTopLine}>
