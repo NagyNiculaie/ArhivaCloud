@@ -114,6 +114,8 @@ function Dashboard() {
   const fileInputRef = useRef(null);
 
   const [docs, setDocs] = useState([]);
+  const [statsData, setStatsData] = useState(null);
+  const [statsLoading, setStatsLoading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [dragActive, setDragActive] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -152,8 +154,28 @@ function Dashboard() {
     }
   };
 
+
+  const loadStats = async () => {
+    try {
+      setStatsLoading(true);
+
+      const res = await axios.get(`${API_URL}/documents/stats`, {
+        headers: {
+          Authorization: `Bearer ${getToken()}`,
+        },
+      });
+
+      setStatsData(res.data.stats || null);
+    } catch (err) {
+      console.error("Eroare la statistici:", err);
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadDocs();
+    loadStats();
   }, []);
 
   const hasProcessingDocs = docs.some(
@@ -165,6 +187,7 @@ function Dashboard() {
 
     const intervalId = setInterval(() => {
       loadDocs();
+      loadStats();
     }, 4000);
 
     return () => clearInterval(intervalId);
@@ -288,6 +311,7 @@ function Dashboard() {
           uploadedCount++;
 
           await loadDocs();
+          await loadStats();
         } catch (err) {
           const isDuplicate = err.response?.status === 409 && err.response?.data?.duplicate;
 
@@ -329,6 +353,7 @@ function Dashboard() {
       }
 
       await loadDocs();
+      await loadStats();
     } catch (err) {
       console.error("Eroare upload:", err);
       setMessage(
@@ -354,6 +379,7 @@ function Dashboard() {
 
       setMessage("Document șters cu succes.");
       await loadDocs();
+      await loadStats();
     } catch (err) {
       console.error("Eroare la ștergere:", err);
       setMessage(
@@ -457,6 +483,7 @@ function Dashboard() {
       );
 
       await loadDocs();
+      await loadStats();
     } catch (err) {
       console.error("Eroare la reprocesare:", err);
       setMessage(
@@ -930,6 +957,137 @@ function Dashboard() {
           )}
         </section>
 
+
+        <section style={styles.statsCard}>
+          <div style={styles.statsHeader}>
+            <div>
+              <h3 style={styles.sectionTitle}>Statistici arhivă</h3>
+              <p style={styles.statsSubtitle}>
+                Statistici calculate exact din documentele salvate, fără cost AI.
+              </p>
+            </div>
+
+            <button style={styles.secondaryBtn} onClick={loadStats}>
+              Actualizează statistici
+            </button>
+          </div>
+
+          {statsLoading && !statsData ? (
+            <div style={styles.emptyBox}>Se încarcă statisticile...</div>
+          ) : !statsData ? (
+            <div style={styles.emptyBox}>Nu există statistici disponibile încă.</div>
+          ) : (
+            <>
+              <div style={styles.statsGrid}>
+                <div style={styles.statCard}>
+                  <span style={styles.statLabel}>Total documente</span>
+                  <strong style={styles.statValue}>
+                    {statsData.totalDocuments || 0}
+                  </strong>
+                </div>
+
+                <div style={styles.statCard}>
+                  <span style={styles.statLabel}>Procesate</span>
+                  <strong style={styles.statValue}>
+                    {statsData.doneCount || 0}
+                  </strong>
+                </div>
+
+                <div style={styles.statCard}>
+                  <span style={styles.statLabel}>În procesare</span>
+                  <strong style={styles.statValue}>
+                    {statsData.processingCount || 0}
+                  </strong>
+                </div>
+
+                <div style={styles.statCard}>
+                  <span style={styles.statLabel}>Cu eroare</span>
+                  <strong style={styles.statValue}>
+                    {statsData.failedCount || 0}
+                  </strong>
+                </div>
+
+                <div style={styles.statCard}>
+                  <span style={styles.statLabel}>Documente cu sumă</span>
+                  <strong style={styles.statValue}>
+                    {statsData.documentsWithAmount || 0}
+                  </strong>
+                </div>
+              </div>
+
+              <div style={styles.statsDetailsGrid}>
+                <div style={styles.statsPanel}>
+                  <h4 style={styles.statsPanelTitle}>Totaluri detectate</h4>
+
+                  {statsData.totalsByCurrency?.length > 0 ? (
+                    <div style={styles.statsList}>
+                      {statsData.totalsByCurrency.map((item) => (
+                        <div style={styles.statsListItem} key={item.currency}>
+                          <span>{item.currency}</span>
+                          <strong>{formatAmount(item.total, item.currency)}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p style={styles.statsEmptyText}>
+                      Nu există sume detectate încă.
+                    </p>
+                  )}
+                </div>
+
+                <div style={styles.statsPanel}>
+                  <h4 style={styles.statsPanelTitle}>Categorii</h4>
+
+                  <div style={styles.statsChips}>
+                    {statsData.categoryCounts?.slice(0, 8).map((item) => (
+                      <span style={styles.statsChip} key={item.key}>
+                        {formatCategory(item.key)}: {item.count}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={styles.statsPanel}>
+                  <h4 style={styles.statsPanelTitle}>Top furnizori</h4>
+
+                  {statsData.supplierCounts?.length > 0 ? (
+                    <div style={styles.statsList}>
+                      {statsData.supplierCounts.slice(0, 5).map((item) => (
+                        <div style={styles.statsListItem} key={item.key}>
+                          <span>{item.key}</span>
+                          <strong>{item.count}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p style={styles.statsEmptyText}>
+                      Nu există furnizori detectați încă.
+                    </p>
+                  )}
+                </div>
+
+                <div style={styles.statsPanel}>
+                  <h4 style={styles.statsPanelTitle}>Ani / luni</h4>
+
+                  <div style={styles.statsChips}>
+                    {statsData.yearCounts?.slice(0, 5).map((item) => (
+                      <span style={styles.statsChip} key={item.key}>
+                        {item.key}: {item.count}
+                      </span>
+                    ))}
+
+                    {statsData.monthCounts?.slice(0, 6).map((item) => (
+                      <span style={styles.statsChip} key={`month-${item.key}`}>
+                        {MONTH_LABELS[item.key] || item.key}: {item.count}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </section>
+
         <section style={styles.docsSection}>
           <div style={styles.docsHeader}>
             <div>
@@ -1392,6 +1550,108 @@ const styles = {
     borderRadius: "18px",
     padding: "24px",
     marginBottom: "24px",
+  },
+
+
+  statsCard: {
+    backgroundColor: "#111827",
+    border: "1px solid #1f2937",
+    borderRadius: "18px",
+    padding: "24px",
+    marginBottom: "24px",
+  },
+
+  statsHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "16px",
+    alignItems: "flex-start",
+    marginBottom: "16px",
+    flexWrap: "wrap",
+  },
+
+  statsSubtitle: {
+    margin: 0,
+    color: "#94a3b8",
+    fontSize: "14px",
+  },
+
+  statsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+    gap: "12px",
+    marginBottom: "16px",
+  },
+
+  statCard: {
+    backgroundColor: "#0f172a",
+    border: "1px solid #1e293b",
+    borderRadius: "14px",
+    padding: "16px",
+    display: "grid",
+    gap: "6px",
+  },
+
+  statLabel: {
+    color: "#94a3b8",
+    fontSize: "13px",
+  },
+
+  statValue: {
+    color: "#fff",
+    fontSize: "24px",
+  },
+
+  statsDetailsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
+    gap: "12px",
+  },
+
+  statsPanel: {
+    backgroundColor: "#0f172a",
+    border: "1px solid #1e293b",
+    borderRadius: "14px",
+    padding: "16px",
+  },
+
+  statsPanelTitle: {
+    margin: "0 0 12px",
+    fontSize: "16px",
+  },
+
+  statsList: {
+    display: "grid",
+    gap: "8px",
+  },
+
+  statsListItem: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "10px",
+    color: "#cbd5e1",
+    fontSize: "13px",
+  },
+
+  statsChips: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "8px",
+  },
+
+  statsChip: {
+    backgroundColor: "#1e293b",
+    color: "#cbd5e1",
+    border: "1px solid #334155",
+    borderRadius: "999px",
+    padding: "6px 10px",
+    fontSize: "12px",
+  },
+
+  statsEmptyText: {
+    margin: 0,
+    color: "#94a3b8",
+    fontSize: "13px",
   },
 
   docsSection: {
