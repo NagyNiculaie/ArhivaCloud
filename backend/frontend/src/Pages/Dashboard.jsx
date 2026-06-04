@@ -78,6 +78,23 @@ function formatFileSize(size) {
   return `${(size / (1024 * 1024)).toFixed(2)} MB`;
 }
 
+
+function csvEscape(value) {
+  if (value === null || value === undefined) return "";
+
+  const stringValue = String(value).replace(/\r?\n|\r/g, " ").trim();
+
+  if (
+    stringValue.includes(";") ||
+    stringValue.includes('"') ||
+    stringValue.includes(",")
+  ) {
+    return `"${stringValue.replace(/"/g, '""')}"`;
+  }
+
+  return stringValue;
+}
+
 function normalizeText(value = "") {
   return value
     .toString()
@@ -473,6 +490,69 @@ function Dashboard() {
     setSupplierFilter("");
   };
 
+
+  const exportDocumentsToCsv = () => {
+    if (filteredDocs.length === 0) {
+      setMessage("Nu există documente de exportat pentru filtrele selectate.");
+      return;
+    }
+
+    const headers = [
+      "Nume fișier",
+      "Categorie",
+      "Status procesare",
+      "Status clasificare",
+      "Furnizor",
+      "Data document",
+      "An",
+      "Lună",
+      "Total",
+      "Monedă",
+      "Rezumat IA",
+      "Taguri",
+      "URL document",
+    ];
+
+    const rows = filteredDocs.map((doc) => [
+      doc.file?.originalName || "",
+      formatCategory(doc.category),
+      formatProcessingStatus(doc.processingStatus),
+      doc.classificationStatus || "",
+      doc.supplier || "",
+      formatDate(doc.documentDate),
+      doc.year || "",
+      doc.month ? MONTH_LABELS[doc.month] || doc.month : "",
+      typeof doc.totalAmount === "number" ? doc.totalAmount : "",
+      doc.currency || "",
+      doc.aiSummary || "",
+      Array.isArray(doc.tags) ? doc.tags.join(", ") : "",
+      doc.file?.url || "",
+    ]);
+
+    const csvContent = [headers, ...rows]
+      .map((row) => row.map(csvEscape).join(";"))
+      .join("\n");
+
+    const blob = new Blob(["\ufeff" + csvContent], {
+      type: "text/csv;charset=utf-8;",
+    });
+
+    const today = new Date().toISOString().slice(0, 10);
+    const fileName = `arhiva-documente-${today}.csv`;
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    URL.revokeObjectURL(url);
+
+    setMessage(`Export CSV generat: ${filteredDocs.length} document(e).`);
+  };
+
   return (
     <div style={styles.page}>
       <aside style={styles.sidebar}>
@@ -813,7 +893,70 @@ function Dashboard() {
                 const isProcessing = doc.processingStatus === "processing";
                 const hasFailed = doc.processingStatus === "failed";
 
-                return (
+              
+  const exportDocumentsToCsv = () => {
+    if (filteredDocs.length === 0) {
+      setMessage("Nu există documente de exportat pentru filtrele selectate.");
+      return;
+    }
+
+    const headers = [
+      "Nume fișier",
+      "Categorie",
+      "Status procesare",
+      "Status clasificare",
+      "Furnizor",
+      "Data document",
+      "An",
+      "Lună",
+      "Total",
+      "Monedă",
+      "Rezumat IA",
+      "Taguri",
+      "URL document",
+    ];
+
+    const rows = filteredDocs.map((doc) => [
+      doc.file?.originalName || "",
+      formatCategory(doc.category),
+      formatProcessingStatus(doc.processingStatus),
+      doc.classificationStatus || "",
+      doc.supplier || "",
+      formatDate(doc.documentDate),
+      doc.year || "",
+      doc.month ? MONTH_LABELS[doc.month] || doc.month : "",
+      typeof doc.totalAmount === "number" ? doc.totalAmount : "",
+      doc.currency || "",
+      doc.aiSummary || "",
+      Array.isArray(doc.tags) ? doc.tags.join(", ") : "",
+      doc.file?.url || "",
+    ]);
+
+    const csvContent = [headers, ...rows]
+      .map((row) => row.map(csvEscape).join(";"))
+      .join("\n");
+
+    const blob = new Blob(["\ufeff" + csvContent], {
+      type: "text/csv;charset=utf-8;",
+    });
+
+    const today = new Date().toISOString().slice(0, 10);
+    const fileName = `arhiva-documente-${today}.csv`;
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    URL.revokeObjectURL(url);
+
+    setMessage(`Export CSV generat: ${filteredDocs.length} document(e).`);
+  };
+
+  return (
                   <div key={doc._id} style={styles.docCard}>
                     <div>
                       <div style={styles.cardTopLine}>
@@ -1165,6 +1308,24 @@ const styles = {
     gap: "16px",
     alignItems: "flex-start",
     marginBottom: "16px",
+  },
+
+
+  docsHeaderActions: {
+    display: "flex",
+    gap: "10px",
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
+
+  exportBtn: {
+    padding: "10px 14px",
+    borderRadius: "12px",
+    border: "none",
+    backgroundColor: "#059669",
+    color: "#fff",
+    cursor: "pointer",
+    fontWeight: "bold",
   },
 
   sectionTitle: {
