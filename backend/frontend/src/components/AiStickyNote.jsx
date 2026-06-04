@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 function renderInlineMarkdown(text) {
   const parts = text.split(/(\*\*.*?\*\*)/g);
@@ -59,16 +59,25 @@ function renderAnswer(answer) {
   });
 }
 
-export default function AiStickyNote({ answer, sources, onClose }) {
+export default function AiStickyNote({ notes = [], onClose, onDeleteNote }) {
   const contentRef = useRef(null);
+  const [activeNoteId, setActiveNoteId] = useState(null);
+
+  useEffect(() => {
+    if (notes.length > 0) {
+      setActiveNoteId(notes[0].id);
+    }
+  }, [notes]);
 
   useEffect(() => {
     if (contentRef.current) {
       contentRef.current.scrollTop = 0;
     }
-  }, [answer]);
+  }, [activeNoteId]);
 
-  if (!answer) return null;
+  if (!notes.length) return null;
+
+  const activeNote = notes.find((note) => note.id === activeNoteId) || notes[0];
 
   return (
     <div style={styles.overlay}>
@@ -76,7 +85,7 @@ export default function AiStickyNote({ answer, sources, onClose }) {
         <div style={styles.header}>
           <div>
             <span style={styles.headerIcon}>📝</span>
-            <span>Răspuns AI</span>
+            <span>Răspunsuri AI</span>
           </div>
 
           <button style={styles.closeBtn} onClick={onClose}>
@@ -84,14 +93,34 @@ export default function AiStickyNote({ answer, sources, onClose }) {
           </button>
         </div>
 
-        <div ref={contentRef} style={styles.content} className="ai-note-scroll">
-          <div style={styles.answerText}>{renderAnswer(answer)}</div>
+        <div style={styles.tabs}>
+          {notes.map((note, index) => (
+            <button
+              key={note.id}
+              onClick={() => setActiveNoteId(note.id)}
+              style={{
+                ...styles.tabBtn,
+                ...(activeNote.id === note.id ? styles.activeTabBtn : {}),
+              }}
+            >
+              Întrebarea {notes.length - index}
+            </button>
+          ))}
+        </div>
 
-          {sources?.length > 0 && (
+        <div ref={contentRef} style={styles.content} className="ai-note-scroll">
+          <div style={styles.questionBox}>
+            <strong>Întrebare:</strong>
+            <p>{activeNote.question}</p>
+          </div>
+
+          <div style={styles.answerText}>{renderAnswer(activeNote.answer)}</div>
+
+          {activeNote.sources?.length > 0 && (
             <div style={styles.sourcesBox}>
               <strong style={styles.sourcesTitle}>Surse utilizate</strong>
 
-              {sources.map((src, index) => (
+              {activeNote.sources.map((src, index) => (
                 <div style={styles.sourceItem} key={index}>
                   <span style={styles.sourceName}>{src.fileName}</span>
 
@@ -115,6 +144,13 @@ export default function AiStickyNote({ answer, sources, onClose }) {
               ))}
             </div>
           )}
+
+          <button
+            style={styles.deleteNoteBtn}
+            onClick={() => onDeleteNote(activeNote.id)}
+          >
+            Șterge acest răspuns
+          </button>
         </div>
       </div>
     </div>
@@ -124,14 +160,14 @@ export default function AiStickyNote({ answer, sources, onClose }) {
 const styles = {
   overlay: {
     position: "fixed",
-    right: "28px",
-    bottom: "28px",
+    right: "24px",
+    bottom: "24px",
     zIndex: 9999,
   },
 
   note: {
-    width: "520px",
-    maxHeight: "76vh",
+    width: "500px",
+    maxHeight: "72vh",
     backgroundColor: "#111827",
     color: "#e5e7eb",
     borderRadius: "22px",
@@ -146,7 +182,7 @@ const styles = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: "16px 18px",
+    padding: "15px 18px",
     background: "linear-gradient(135deg, #1e293b, #111827)",
     borderBottom: "1px solid #334155",
     fontWeight: "800",
@@ -170,10 +206,44 @@ const styles = {
     fontWeight: "bold",
   },
 
+  tabs: {
+    display: "flex",
+    gap: "8px",
+    padding: "10px 14px",
+    borderBottom: "1px solid #334155",
+    overflowX: "auto",
+    backgroundColor: "#0f172a",
+  },
+
+  tabBtn: {
+    border: "1px solid #334155",
+    backgroundColor: "#111827",
+    color: "#cbd5e1",
+    padding: "8px 10px",
+    borderRadius: "999px",
+    cursor: "pointer",
+    fontSize: "13px",
+    whiteSpace: "nowrap",
+  },
+
+  activeTabBtn: {
+    backgroundColor: "#2563eb",
+    borderColor: "#2563eb",
+    color: "#ffffff",
+  },
+
   content: {
-    padding: "20px",
-    maxHeight: "62vh",
+    padding: "18px",
+    maxHeight: "52vh",
     overflowY: "auto",
+  },
+
+  questionBox: {
+    backgroundColor: "#0f172a",
+    border: "1px solid #334155",
+    borderRadius: "14px",
+    padding: "12px",
+    marginBottom: "16px",
   },
 
   answerText: {
@@ -247,6 +317,18 @@ const styles = {
     borderRadius: "9px",
     textDecoration: "none",
     fontSize: "13px",
+    fontWeight: "700",
+  },
+
+  deleteNoteBtn: {
+    marginTop: "16px",
+    width: "100%",
+    padding: "10px",
+    borderRadius: "12px",
+    border: "1px solid #475569",
+    backgroundColor: "#1e293b",
+    color: "#e5e7eb",
+    cursor: "pointer",
     fontWeight: "700",
   },
 };

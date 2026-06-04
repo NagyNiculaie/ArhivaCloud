@@ -20,8 +20,7 @@ function Dashboard() {
   const [searchLoading, setSearchLoading] = useState(false);
 
   const [question, setQuestion] = useState("");
-  const [aiAnswer, setAiAnswer] = useState("");
-  const [aiSources, setAiSources] = useState([]);
+  const [aiNotes, setAiNotes] = useState([]);
   const [askLoading, setAskLoading] = useState(false);
 
   const loadDocs = async () => {
@@ -130,19 +129,19 @@ function Dashboard() {
 
   const askDocuments = async () => {
     try {
-      if (!question.trim()) {
+      const currentQuestion = question.trim();
+
+      if (!currentQuestion) {
         setMessage("Scrie o întrebare.");
         return;
       }
 
       setAskLoading(true);
-      setAiAnswer("");
-      setAiSources([]);
       setMessage("Se analizează documentele...");
 
       const res = await axios.post(
         `${API_URL}/documents/ask`,
-        { question },
+        { question: currentQuestion },
         {
           headers: {
             Authorization: `Bearer ${getToken()}`,
@@ -150,8 +149,17 @@ function Dashboard() {
         }
       );
 
-      setAiAnswer(res.data.answer || "");
-      setAiSources(res.data.sources || []);
+      setAiNotes((prev) => [
+        {
+          id: Date.now(),
+          question: currentQuestion,
+          answer: res.data.answer || "",
+          sources: res.data.sources || [],
+        },
+        ...prev,
+      ]);
+
+      setQuestion("");
       setMessage("Analiză finalizată.");
     } catch (err) {
       console.error("Ask AI error:", err);
@@ -266,6 +274,11 @@ function Dashboard() {
               placeholder="Ex: Care este valoarea totală din factura Vodafone?"
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !askLoading) {
+                  askDocuments();
+                }
+              }}
               style={styles.searchInput}
             />
 
@@ -277,6 +290,12 @@ function Dashboard() {
               {askLoading ? "Se analizează..." : "Întreabă"}
             </button>
           </div>
+
+          {aiNotes.length > 0 && (
+            <p style={styles.aiHistoryInfo}>
+              Ai {aiNotes.length} răspuns(uri) AI în istoric.
+            </p>
+          )}
         </section>
 
         <section style={styles.docsSection}>
@@ -321,12 +340,11 @@ function Dashboard() {
       </main>
 
       <AiStickyNote
-        answer={aiAnswer}
-        sources={aiSources}
-        onClose={() => {
-          setAiAnswer("");
-          setAiSources([]);
-        }}
+        notes={aiNotes}
+        onClose={() => setAiNotes([])}
+        onDeleteNote={(id) =>
+          setAiNotes((prev) => prev.filter((note) => note.id !== id))
+        }
       />
     </div>
   );
@@ -463,6 +481,12 @@ const styles = {
   message: {
     marginTop: "14px",
     color: "#d1d5db",
+  },
+
+  aiHistoryInfo: {
+    marginTop: "12px",
+    color: "#94a3b8",
+    fontSize: "14px",
   },
 
   emptyBox: {
