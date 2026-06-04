@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { getToken, getUser, logout } from "../Utils/auth";
 import { useNavigate } from "react-router-dom";
@@ -68,6 +68,16 @@ function formatAmount(amount, currency = "RON") {
   })} ${currency || "RON"}`;
 }
 
+function formatFileSize(size) {
+  if (!size || typeof size !== "number") return "";
+
+  if (size < 1024 * 1024) {
+    return `${(size / 1024).toFixed(1)} KB`;
+  }
+
+  return `${(size / (1024 * 1024)).toFixed(2)} MB`;
+}
+
 function normalizeText(value = "") {
   return value
     .toString()
@@ -84,13 +94,23 @@ function getProcessingBadgeStyle(status) {
   return styles.statusWarn;
 }
 
+function isAcceptedFile(file) {
+  return file.type === "application/pdf" || file.type.startsWith("image/");
+}
+
 function Dashboard() {
   const navigate = useNavigate();
   const user = getUser();
+  const fileInputRef = useRef(null);
 
   const [docs, setDocs] = useState([]);
-  const [file, setFile] = useState(null);
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const [dragActive, setDragActive] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({
+    current: 0,
+    total: 0,
+  });
   const [message, setMessage] = useState("");
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -139,32 +159,126 @@ function Dashboard() {
     return () => clearInterval(intervalId);
   }, [hasProcessingDocs]);
 
-  const uploadFile = async () => {
+  const addSelectedFiles = (files) => {
+    const incomingFiles = Array.from(files || []);
+    const acceptedFiles = incomingFiles.filter(isAcceptedFile);
+    const rejectedCount = incomingFiles.length - acceptedFiles.length;
+
+    if (rejectedCount > 0) {
+      setMessage(
+        `${rejectedCount} fișier(e) ignorate. Sunt acceptate doar PDF-uri și imagini.`
+      );
+    }
+
+    if (acceptedFiles.length === 0) return;
+
+    setSelectedFiles((prev) => {
+      const existingKeys = new Set(
+        prev.map((file) => `${file.name}-${file.size}-${file.lastModified}`)
+      );
+
+      const uniqueFiles = acceptedFiles.filter((file) => {
+        const key = `${file.name}-${file.size}-${file.lastModified}`;
+        return !existingKeys.has(key);
+      });
+
+      return [...prev, ...uniqueFiles];
+    });
+  };
+
+  const removeSelectedFile = (indexToRemove) => {
+    setSelectedFiles((prev) =>
+      prev.filter((_, index) => index !== indexToRemove)
+    );
+  };
+
+  const clearSelectedFiles = () => {
+    setSelectedFiles([]);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleInputFiles = (event) => {
+    addSelectedFiles(event.target.files);
+  };
+
+  const handleDrop = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    setDragActive(false);
+    addSelectedFiles(event.dataTransfer.files);
+  };
+
+  const handleDragOver = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setDragActive(true);
+  };
+
+  const handleDragLeave = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setDragActive(false);
+  };
+
+  const openFileDialog = () => {
+    fileInputRef.current?.click();
+  };
+
+  const uploadSingleFile = async (currentFile) => {
+    const formData = new FormData();
+    formData.append("file", currentFile);
+
+    return axios.post(`${API_URL}/documents/upload`, formData, {
+      headers: {
+        Authorization: `Bearer ${getToken()}`,
+        "Content-Type": "multipart/form-data",
+      },
+    });
+  };
+
+  const uploadFiles = async () => {
     try {
-      if (!file) {
-        setMessage("Selectează un fișier mai întâi.");
+      if (selectedFiles.length === 0) {
+        setMessage("Selectează sau trage cel puțin un fișier.");
         return;
       }
 
       setLoading(true);
-      setMessage("Se încarcă fișierul...");
-
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const res = await axios.post(`${API_URL}/documents/upload`, formData, {
-        headers: {
-          Authorization: `Bearer ${getToken()}`,
-          "Content-Type": "multipart/form-data",
-        },
+      setUploadProgress({
+        current: 0,
+        total: selectedFiles.length,
       });
 
-      console.log("Upload OK:", res.data);
+      let uploadedCount = 0;
+
+      for (let i = 0; i < selectedFiles.length; i++) {
+        const currentFile = selectedFiles[i];
+
+        setUploadProgress({
+          current: i + 1,
+          total: selectedFiles.length,
+        });
+
+        setMessage(
+          `Se încarcă ${i + 1}/${selectedFiles.length}: ${currentFile.name}`
+        );
+
+        const res = await uploadSingleFile(currentFile);
+
+        console.log("Upload OK:", res.data);
+        uploadedCount++;
+
+        await loadDocs();
+      }
+
       setMessage(
-        res.data.message ||
-          "Upload reușit! Documentul se procesează în fundal."
+        `${uploadedCount} document(e) încărcate. Analiza AI rulează în fundal.`
       );
-      setFile(null);
+      clearSelectedFiles();
 
       await loadDocs();
     } catch (err) {
@@ -174,6 +288,10 @@ function Dashboard() {
       );
     } finally {
       setLoading(false);
+      setUploadProgress({
+        current: 0,
+        total: 0,
+      });
     }
   };
 
@@ -348,22 +466,99 @@ function Dashboard() {
         </div>
 
         <section style={styles.uploadCard}>
-          <h3 style={styles.sectionTitle}>Upload document</h3>
+          <h3 style={styles.sectionTitle}>Upload documente</h3>
 
-          <div style={styles.uploadRow}>
+          <div
+            style={{
+              ...styles.dropZone,
+              ...(dragActive ? styles.dropZoneActive : {}),
+            }}
+            onClick={openFileDialog}
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+          >
             <input
+              ref={fileInputRef}
               type="file"
               accept=".pdf,image/*"
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
+              multiple
+              onChange={handleInputFiles}
+              style={styles.hiddenFileInput}
             />
 
+            <div style={styles.dropIcon}>📂</div>
+
+            <strong style={styles.dropTitle}>
+              Trage documentele aici sau apasă pentru selectare
+            </strong>
+
+            <span style={styles.dropSubtitle}>
+              Poți încărca mai multe PDF-uri, JPG-uri sau PNG-uri odată.
+            </span>
+          </div>
+
+          {selectedFiles.length > 0 && (
+            <div style={styles.selectedFilesBox}>
+              <div style={styles.selectedFilesHeader}>
+                <strong>{selectedFiles.length} fișier(e) selectate</strong>
+
+                <button
+                  type="button"
+                  style={styles.smallGhostBtn}
+                  onClick={clearSelectedFiles}
+                  disabled={loading}
+                >
+                  Golește lista
+                </button>
+              </div>
+
+              <div style={styles.selectedFilesList}>
+                {selectedFiles.map((selectedFile, index) => (
+                  <div
+                    key={`${selectedFile.name}-${selectedFile.size}-${selectedFile.lastModified}`}
+                    style={styles.selectedFileItem}
+                  >
+                    <div>
+                      <strong>{selectedFile.name}</strong>
+                      <p style={styles.selectedFileMeta}>
+                        {selectedFile.type || "Fișier"} •{" "}
+                        {formatFileSize(selectedFile.size)}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      style={styles.removeFileBtn}
+                      onClick={() => removeSelectedFile(index)}
+                      disabled={loading}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div style={styles.uploadActions}>
             <button
               style={styles.primaryBtn}
-              onClick={uploadFile}
-              disabled={loading}
+              onClick={uploadFiles}
+              disabled={loading || selectedFiles.length === 0}
             >
-              {loading ? "Se încarcă..." : "Upload"}
+              {loading
+                ? `Se încarcă ${uploadProgress.current}/${uploadProgress.total}`
+                : selectedFiles.length > 1
+                ? "Upload toate documentele"
+                : "Upload document"}
             </button>
+
+            {selectedFiles.length > 0 && (
+              <span style={styles.uploadCounter}>
+                {selectedFiles.length} fișier(e) pregătite pentru upload
+              </span>
+            )}
           </div>
 
           {message && <p style={styles.message}>{message}</p>}
@@ -788,6 +983,114 @@ const styles = {
     borderRadius: "18px",
     padding: "24px",
     marginBottom: "24px",
+  },
+
+  dropZone: {
+    border: "2px dashed #334155",
+    backgroundColor: "#0f172a",
+    borderRadius: "18px",
+    padding: "28px",
+    cursor: "pointer",
+    display: "grid",
+    placeItems: "center",
+    textAlign: "center",
+    gap: "8px",
+    transition: "0.2s ease",
+  },
+
+  dropZoneActive: {
+    borderColor: "#6366f1",
+    backgroundColor: "#111c3a",
+    transform: "scale(1.01)",
+  },
+
+  hiddenFileInput: {
+    display: "none",
+  },
+
+  dropIcon: {
+    fontSize: "34px",
+  },
+
+  dropTitle: {
+    fontSize: "18px",
+  },
+
+  dropSubtitle: {
+    color: "#94a3b8",
+    fontSize: "14px",
+  },
+
+  selectedFilesBox: {
+    marginTop: "16px",
+    padding: "14px",
+    borderRadius: "16px",
+    backgroundColor: "#0f172a",
+    border: "1px solid #1e293b",
+  },
+
+  selectedFilesHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "12px",
+    alignItems: "center",
+    marginBottom: "12px",
+  },
+
+  selectedFilesList: {
+    display: "grid",
+    gap: "10px",
+  },
+
+  selectedFileItem: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "12px",
+    alignItems: "center",
+    padding: "10px 12px",
+    backgroundColor: "#111827",
+    border: "1px solid #334155",
+    borderRadius: "12px",
+  },
+
+  selectedFileMeta: {
+    margin: "5px 0 0",
+    color: "#94a3b8",
+    fontSize: "13px",
+  },
+
+  smallGhostBtn: {
+    padding: "7px 10px",
+    borderRadius: "10px",
+    border: "1px solid #475569",
+    backgroundColor: "#1e293b",
+    color: "#e5e7eb",
+    cursor: "pointer",
+    fontWeight: "bold",
+  },
+
+  removeFileBtn: {
+    minWidth: "30px",
+    height: "30px",
+    borderRadius: "10px",
+    border: "1px solid #475569",
+    backgroundColor: "#1e293b",
+    color: "#fff",
+    cursor: "pointer",
+    fontWeight: "bold",
+  },
+
+  uploadActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+    flexWrap: "wrap",
+    marginTop: "16px",
+  },
+
+  uploadCounter: {
+    color: "#94a3b8",
+    fontSize: "14px",
   },
 
   searchCard: {
