@@ -573,7 +573,7 @@ function Dashboard() {
     }
 
     const workbook = new ExcelJS.Workbook();
-    workbook.creator = "Arhiva Cloud";
+    workbook.creator = "ArhivIQ";
     workbook.created = new Date();
 
     const worksheet = workbook.addWorksheet("Documente");
@@ -715,7 +715,10 @@ function Dashboard() {
   return (
     <div style={styles.page}>
       <aside style={styles.sidebar}>
-        <h2 style={styles.logo}>Arhiva Cloud</h2>
+        <div style={styles.logoRow}>
+  <img src="/arhiviq.svg" alt="ArhivIQ" style={styles.logoIcon} />
+  <h2 style={styles.logo}>ArhivIQ</h2>
+</div>
 
         <p style={styles.userText}>
           Bun venit, {user?.name || "Utilizator"}
@@ -1384,7 +1387,19 @@ const styles = {
     margin: 0,
     fontSize: "26px",
   },
+  logoRow: {
+  display: "flex",
+  alignItems: "center",
+  gap: "12px",
+},
 
+logoIcon: {
+  width: "64px",
+  height: "64px",
+  borderRadius: "16px",
+  objectFit: "cover",
+  boxShadow: "0 0 18px rgba(56, 189, 248, 0.35)",
+},
   userText: {
     marginTop: "16px",
     color: "#cbd5e1",
