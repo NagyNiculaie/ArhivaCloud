@@ -34,8 +34,19 @@ const MONTH_LABELS = {
   12: "Decembrie",
 };
 
+const PROCESSING_LABELS = {
+  uploaded: "Încărcat",
+  processing: "Se procesează",
+  done: "Procesat",
+  failed: "Eroare procesare",
+};
+
 function formatCategory(category) {
   return CATEGORY_LABELS[category] || category || "Altul";
+}
+
+function formatProcessingStatus(status) {
+  return PROCESSING_LABELS[status] || status || "Necunoscut";
 }
 
 function formatDate(value) {
@@ -63,6 +74,14 @@ function normalizeText(value = "") {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
+}
+
+function getProcessingBadgeStyle(status) {
+  if (status === "done") return styles.statusOk;
+  if (status === "processing") return styles.statusProcessing;
+  if (status === "failed") return styles.statusError;
+
+  return styles.statusWarn;
 }
 
 function Dashboard() {
@@ -106,6 +125,20 @@ function Dashboard() {
     loadDocs();
   }, []);
 
+  const hasProcessingDocs = docs.some(
+    (doc) => doc.processingStatus === "processing"
+  );
+
+  useEffect(() => {
+    if (!hasProcessingDocs) return;
+
+    const intervalId = setInterval(() => {
+      loadDocs();
+    }, 4000);
+
+    return () => clearInterval(intervalId);
+  }, [hasProcessingDocs]);
+
   const uploadFile = async () => {
     try {
       if (!file) {
@@ -114,7 +147,7 @@ function Dashboard() {
       }
 
       setLoading(true);
-      setMessage("Se încarcă și se analizează fișierul...");
+      setMessage("Se încarcă fișierul...");
 
       const formData = new FormData();
       formData.append("file", file);
@@ -127,7 +160,10 @@ function Dashboard() {
       });
 
       console.log("Upload OK:", res.data);
-      setMessage("Upload reușit! Documentul a fost analizat.");
+      setMessage(
+        res.data.message ||
+          "Upload reușit! Documentul se procesează în fundal."
+      );
       setFile(null);
 
       await loadDocs();
@@ -263,13 +299,23 @@ function Dashboard() {
     const matchesSupplier =
       !supplierFilter.trim() ||
       normalizeText(doc.supplier).includes(normalizeText(supplierFilter)) ||
-      normalizeText(doc.file?.originalName).includes(normalizeText(supplierFilter));
+      normalizeText(doc.file?.originalName).includes(
+        normalizeText(supplierFilter)
+      );
 
     return matchesCategory && matchesYear && matchesMonth && matchesSupplier;
   });
 
   const classifiedCount = docs.filter(
     (doc) => doc.classificationStatus === "classified"
+  ).length;
+
+  const processingCount = docs.filter(
+    (doc) => doc.processingStatus === "processing"
+  ).length;
+
+  const failedCount = docs.filter(
+    (doc) => doc.processingStatus === "failed"
   ).length;
 
   const resetArchiveFilters = () => {
@@ -316,11 +362,18 @@ function Dashboard() {
               onClick={uploadFile}
               disabled={loading}
             >
-              {loading ? "Se procesează..." : "Upload"}
+              {loading ? "Se încarcă..." : "Upload"}
             </button>
           </div>
 
           {message && <p style={styles.message}>{message}</p>}
+
+          {hasProcessingDocs && (
+            <p style={styles.processingHint}>
+              {processingCount} document(e) se procesează în fundal. Lista se
+              actualizează automat.
+            </p>
+          )}
         </section>
 
         <section style={styles.searchCard}>
@@ -349,18 +402,36 @@ function Dashboard() {
           {searchResults.length > 0 && (
             <div style={styles.resultsBox}>
               {searchResults.map((item) => (
-                <div key={item.chunk?.id || item.document._id} style={styles.resultItem}>
+                <div
+                  key={item.chunk?.id || item.document._id}
+                  style={styles.resultItem}
+                >
                   <strong>{item.document.file?.originalName}</strong>
 
                   <p style={styles.docMeta}>
                     Scor relevanță: {item.score.toFixed(3)}
                   </p>
 
-                  {item.document.category && (
-                    <span style={styles.badge}>
-                      {formatCategory(item.document.category)}
-                    </span>
-                  )}
+                  <div style={styles.cardTopLine}>
+                    {item.document.category && (
+                      <span style={styles.badge}>
+                        {formatCategory(item.document.category)}
+                      </span>
+                    )}
+
+                    {item.document.processingStatus && (
+                      <span
+                        style={{
+                          ...styles.statusBadge,
+                          ...getProcessingBadgeStyle(
+                            item.document.processingStatus
+                          ),
+                        }}
+                      >
+                        {formatProcessingStatus(item.document.processingStatus)}
+                      </span>
+                    )}
+                  </div>
 
                   {item.document.supplier && (
                     <p style={styles.docInfo}>
@@ -408,6 +479,13 @@ function Dashboard() {
             </button>
           </div>
 
+          {hasProcessingDocs && (
+            <p style={styles.processingHint}>
+              Unele documente încă se procesează. IA poate răspunde complet doar
+              după finalizarea procesării.
+            </p>
+          )}
+
           {aiNotes.length > 0 && (
             <p style={styles.aiHistoryInfo}>
               Ai {aiNotes.length} răspuns(uri) AI în istoric.
@@ -420,8 +498,9 @@ function Dashboard() {
             <div>
               <h3 style={styles.sectionTitle}>Documentele mele</h3>
               <p style={styles.archiveStats}>
-                {docs.length} document(e) total • {classifiedCount} clasificate de IA •{" "}
-                {filteredDocs.length} afișate
+                {docs.length} document(e) total • {classifiedCount} clasificate
+                de IA • {processingCount} în procesare • {failedCount} cu eroare
+                • {filteredDocs.length} afișate
               </p>
             </div>
 
@@ -506,6 +585,8 @@ function Dashboard() {
                 const documentDate = formatDate(doc.documentDate);
                 const amount = formatAmount(doc.totalAmount, doc.currency);
                 const monthLabel = doc.month ? MONTH_LABELS[doc.month] : "";
+                const isProcessing = doc.processingStatus === "processing";
+                const hasFailed = doc.processingStatus === "failed";
 
                 return (
                   <div key={doc._id} style={styles.docCard}>
@@ -515,18 +596,30 @@ function Dashboard() {
                           {formatCategory(doc.category)}
                         </span>
 
-                        {doc.classificationStatus && (
+                        {doc.processingStatus && (
                           <span
                             style={{
                               ...styles.statusBadge,
-                              ...(doc.classificationStatus === "classified"
-                                ? styles.statusOk
-                                : styles.statusWarn),
+                              ...getProcessingBadgeStyle(doc.processingStatus),
                             }}
                           >
-                            {doc.classificationStatus}
+                            {formatProcessingStatus(doc.processingStatus)}
                           </span>
                         )}
+
+                        {doc.classificationStatus &&
+                          doc.classificationStatus !== "pending" && (
+                            <span
+                              style={{
+                                ...styles.statusBadge,
+                                ...(doc.classificationStatus === "classified"
+                                  ? styles.statusOk
+                                  : styles.statusWarn),
+                              }}
+                            >
+                              {doc.classificationStatus}
+                            </span>
+                          )}
                       </div>
 
                       <h4 style={styles.docTitle}>{doc.file?.originalName}</h4>
@@ -534,6 +627,26 @@ function Dashboard() {
                       <p style={styles.docMeta}>
                         {doc.file?.mimeType || "Fișier"}
                       </p>
+
+                      {isProcessing && (
+                        <div style={styles.processingBox}>
+                          <strong>Se procesează AI...</strong>
+                          <span>
+                            Documentul a fost încărcat. OCR-ul, clasificarea și
+                            indexarea rulează în fundal.
+                          </span>
+                        </div>
+                      )}
+
+                      {hasFailed && (
+                        <div style={styles.errorBox}>
+                          <strong>Procesare eșuată</strong>
+                          <span>
+                            {doc.processingError ||
+                              "Nu s-a putut finaliza procesarea AI."}
+                          </span>
+                        </div>
+                      )}
 
                       <div style={styles.docInfoBox}>
                         {doc.supplier && (
@@ -781,6 +894,12 @@ const styles = {
     color: "#d1d5db",
   },
 
+  processingHint: {
+    marginTop: "12px",
+    color: "#fbbf24",
+    fontSize: "14px",
+  },
+
   aiHistoryInfo: {
     marginTop: "12px",
     color: "#94a3b8",
@@ -876,8 +995,16 @@ const styles = {
     backgroundColor: "#047857",
   },
 
+  statusProcessing: {
+    backgroundColor: "#ca8a04",
+  },
+
   statusWarn: {
     backgroundColor: "#b45309",
+  },
+
+  statusError: {
+    backgroundColor: "#dc2626",
   },
 
   docTitle: {
@@ -890,6 +1017,32 @@ const styles = {
     marginTop: "8px",
     color: "#94a3b8",
     fontSize: "14px",
+  },
+
+  processingBox: {
+    display: "grid",
+    gap: "4px",
+    marginTop: "12px",
+    padding: "12px",
+    borderRadius: "12px",
+    backgroundColor: "rgba(202, 138, 4, 0.15)",
+    border: "1px solid rgba(202, 138, 4, 0.35)",
+    color: "#fde68a",
+    fontSize: "13px",
+    lineHeight: 1.4,
+  },
+
+  errorBox: {
+    display: "grid",
+    gap: "4px",
+    marginTop: "12px",
+    padding: "12px",
+    borderRadius: "12px",
+    backgroundColor: "rgba(220, 38, 38, 0.15)",
+    border: "1px solid rgba(220, 38, 38, 0.35)",
+    color: "#fecaca",
+    fontSize: "13px",
+    lineHeight: 1.4,
   },
 
   docInfoBox: {
