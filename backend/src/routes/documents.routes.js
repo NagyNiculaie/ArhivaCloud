@@ -33,6 +33,84 @@ function splitTextIntoChunks(text, maxLength = 1200) {
   return chunks;
 }
 
+function normalizeForSearch(value = "") {
+  return value
+    .toString()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9., -]/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractSearchTerms(question = "") {
+  const stopWords = new Set([
+    "care",
+    "este",
+    "sunt",
+    "din",
+    "pentru",
+    "factura",
+    "facturi",
+    "document",
+    "documente",
+    "spune",
+    "cauta",
+    "vreau",
+    "toate",
+    "toata",
+    "toti",
+    "imi",
+    "arata",
+    "cu",
+    "la",
+    "de",
+    "si",
+    "in",
+    "pe",
+    "un",
+    "o",
+    "ale",
+    "al",
+    "ai",
+    "le",
+    "ce",
+    "cat",
+    "catre",
+    "dupa",
+    "sau",
+    "fiecare",
+    "gaseste",
+    "extrage",
+    "analizeaza",
+  ]);
+
+  const normalized = normalizeForSearch(question);
+
+  return normalized
+    .split(" ")
+    .map((term) => term.trim())
+    .filter((term) => term.length >= 3)
+    .filter((term) => !stopWords.has(term));
+}
+
+function keywordMatchScore(questionTerms, text = "") {
+  if (!questionTerms.length) return 0;
+
+  const normalizedText = normalizeForSearch(text);
+
+  let matches = 0;
+
+  for (const term of questionTerms) {
+    if (normalizedText.includes(term)) {
+      matches++;
+    }
+  }
+
+  return matches / questionTerms.length;
+}
+
 // Upload document
 router.post("/upload", auth, upload.single("file"), async (req, res) => {
   try {
@@ -50,7 +128,6 @@ router.post("/upload", auth, upload.single("file"), async (req, res) => {
     const safeName = req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
     const filePath = `${req.user.userId}/${Date.now()}-${safeName}`;
 
-    // 1. Upload în Supabase Storage
     const { error: uploadError } = await supabase.storage
       .from(BUCKET_NAME)
       .upload(filePath, req.file.buffer, {
@@ -67,7 +144,6 @@ router.post("/upload", auth, upload.single("file"), async (req, res) => {
       .from(BUCKET_NAME)
       .getPublicUrl(filePath);
 
-    // 2. Extrage textul din fișier
     const text = await extractText({
       buffer: req.file.buffer,
       mimeType: req.file.mimetype,
@@ -82,7 +158,6 @@ router.post("/upload", auth, upload.single("file"), async (req, res) => {
       });
     }
 
-    // 3. Salvează documentul FĂRĂ embedding pe tot textul
     const doc = await Document.create({
       owner: req.user.userId,
 
@@ -99,7 +174,6 @@ router.post("/upload", auth, upload.single("file"), async (req, res) => {
 
     console.log("DOCUMENT SAVED:", doc._id.toString());
 
-    // 4. Împarte textul în chunks
     const chunks = splitTextIntoChunks(text);
 
     console.log("CHUNKS CREATED:", chunks.length);
@@ -113,7 +187,6 @@ router.post("/upload", auth, upload.single("file"), async (req, res) => {
       });
     }
 
-    // 5. Creează embedding pentru fiecare chunk
     for (let i = 0; i < chunks.length; i++) {
       console.log("PROCESSING CHUNK:", i + 1, "/", chunks.length);
 
@@ -301,7 +374,7 @@ router.post("/semantic-search", auth, async (req, res) => {
   }
 });
 
-// Ask AI about user's documents using chunks
+// Ask AI about user's documents using hybrid search
 router.post("/ask", auth, async (req, res) => {
   try {
     const { question } = req.body;
@@ -314,6 +387,7 @@ router.post("/ask", auth, async (req, res) => {
     }
 
     const questionEmbedding = await embedText(question);
+    const questionTerms = extractSearchTerms(question);
 
     const chunks = await DocumentChunk.find({
       owner: req.user.userId,
@@ -329,15 +403,57 @@ router.post("/ask", auth, async (req, res) => {
       });
     }
 
-    const rankedChunks = chunks
-      .map((chunk) => ({
-        chunk,
-        document: chunk.document,
-        score: cosineSimilarity(questionEmbedding, chunk.embedding),
-      }))
-      .filter((item) => item.document)
+    const rankedAllChunks = chunks
+      .map((chunk) => {
+        const document = chunk.document;
+
+        if (!document) return null;
+
+        const searchableText = `
+          ${document.file?.originalName || ""}
+          ${chunk.text || ""}
+        `;
+
+        const semanticScore = cosineSimilarity(
+          questionEmbedding,
+          chunk.embedding
+        );
+
+        const keywordScore = keywordMatchScore(questionTerms, searchableText);
+
+        const finalScore = semanticScore * 0.65 + keywordScore * 0.35;
+
+        return {
+          chunk,
+          document,
+          semanticScore,
+          keywordScore,
+          score: finalScore,
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.score - a.score);
+
+    const groupedByDocument = new Map();
+
+    for (const item of rankedAllChunks) {
+      const documentId = item.document._id.toString();
+
+      if (!groupedByDocument.has(documentId)) {
+        groupedByDocument.set(documentId, []);
+      }
+
+      const documentItems = groupedByDocument.get(documentId);
+
+      if (documentItems.length < 4) {
+        documentItems.push(item);
+      }
+    }
+
+    const rankedChunks = Array.from(groupedByDocument.values())
+      .flat()
       .sort((a, b) => b.score - a.score)
-      .slice(0, 6);
+      .slice(0, 24);
 
     const context = rankedChunks
       .map((item, index) => {
@@ -345,7 +461,9 @@ router.post("/ask", auth, async (req, res) => {
 FRAGMENT ${index + 1}
 Document: ${item.document.file?.originalName}
 Fragment index: ${item.chunk.chunkIndex}
-Scor relevanță: ${item.score.toFixed(3)}
+Scor final: ${item.score.toFixed(3)}
+Scor semantic: ${item.semanticScore.toFixed(3)}
+Scor potrivire exactă: ${item.keywordScore.toFixed(3)}
 
 Text fragment:
 ${item.chunk.text}
@@ -359,13 +477,16 @@ ${item.chunk.text}
         {
           role: "system",
           content:
-            "Ești un asistent AI pentru analizarea documentelor. Răspunde strict pe baza fragmentelor primite. Dacă informația nu există în fragmente, spune clar că nu ai găsit-o. Răspunde în română, clar și organizat. Dacă utilizatorul cere calcule și datele există în fragmente, calculează rezultatul.",
+            "Ești un asistent AI pentru analizarea documentelor încărcate de utilizator. Răspunde strict pe baza fragmentelor primite. Dacă informația nu există în fragmente, spune clar că nu ai găsit-o. Răspunde în română, clar și organizat. Utilizatorul poate cere căutări de tip: facturi după furnizor, facturi după sumă, facturi după dată, comparații între facturi, totaluri sau extragere de date. Dacă întrebarea este despre facturi sau documente financiare, încearcă să extragi pentru fiecare document relevant: furnizorul, numărul facturii, data, scadența dacă există, totalul fără TVA dacă există, TVA-ul dacă există, totalul de plată și moneda. Dacă sunt mai multe documente relevante, fă întâi analiza pe fiecare document, apoi o sinteză finală. Dacă utilizatorul cere calcule și datele există în fragmente, calculează rezultatul. Nu inventa valori care nu apar în fragmente.",
         },
         {
           role: "user",
           content: `
 Întrebare:
 ${question}
+
+Termeni extrași pentru căutare exactă:
+${questionTerms.join(", ") || "Niciun termen extras"}
 
 Fragmente relevante din documentele utilizatorului:
 ${context}
@@ -398,6 +519,8 @@ ${context}
       sources: uniqueSources,
     });
   } catch (err) {
+    console.error("ASK AI ERROR:", err);
+
     res.status(500).json({
       ok: false,
       error: err.message,

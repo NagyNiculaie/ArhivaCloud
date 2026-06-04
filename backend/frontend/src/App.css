@@ -1,42 +1,98 @@
 #root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+  width: 100%;
+  min-height: 100vh;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+/* AI Sticky Note */
+.ai-sticky-note {
+  position: fixed;
+  right: 28px;
+  bottom: 28px;
+  width: 430px;
+  max-height: 75vh;
+  background: #fff7ad;
+  color: #1f2937;
+  border-radius: 18px;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.35);
+  border: 1px solid #eadf78;
+  z-index: 9999;
+  overflow: hidden;
+  font-family: inherit;
+  text-align: left;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
+.ai-sticky-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #f7e86b;
+  padding: 14px 18px;
+  font-weight: 800;
+  border-bottom: 1px solid #dfcf5f;
+}
+
+.ai-sticky-header button {
+  border: none;
+  background: transparent;
+  font-size: 20px;
+  cursor: pointer;
+  color: #1f2937;
+}
+
+.ai-sticky-content {
+  padding: 18px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.ai-answer-text {
+  white-space: pre-wrap;
+  line-height: 1.6;
+  font-size: 15px;
+}
+
+.ai-sticky-sources {
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px dashed #8a7f36;
+}
+
+.ai-source-item {
+  margin-top: 10px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.45);
+  border-radius: 10px;
+}
+
+.ai-source-item span {
+  display: block;
+  font-weight: 700;
+}
+
+.ai-source-item small {
+  display: block;
+  margin-top: 4px;
+  color: #555;
+}
+
+.ai-source-preview {
+  display: inline-block;
+  margin-top: 8px;
+  background: #2563eb;
+  color: white;
+  padding: 7px 10px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+@media (max-width: 600px) {
+  .ai-sticky-note {
+    right: 12px;
+    left: 12px;
+    bottom: 12px;
+    width: auto;
+    max-height: 70vh;
   }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
-}
-
-.card {
-  padding: 2em;
-}
-
-.read-the-docs {
-  color: #888;
 }

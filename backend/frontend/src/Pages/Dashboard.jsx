@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { getToken, getUser, logout } from "../Utils/auth";
 import { useNavigate } from "react-router-dom";
+import AiStickyNote from "../components/AiStickyNote";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -90,8 +91,7 @@ function Dashboard() {
     } catch (err) {
       console.error("Eroare la ștergere:", err);
       setMessage(
-        "Eroare la ștergere: " +
-          (err.response?.data?.error || err.message)
+        "Eroare la ștergere: " + (err.response?.data?.error || err.message)
       );
     }
   };
@@ -277,41 +277,6 @@ function Dashboard() {
               {askLoading ? "Se analizează..." : "Întreabă"}
             </button>
           </div>
-
-          {aiAnswer && (
-            <div style={styles.aiAnswerBox}>
-              <h4 style={{ marginTop: 0 }}>Răspuns AI</h4>
-
-              <p style={styles.aiAnswerText}>{aiAnswer}</p>
-
-              {aiSources.length > 0 && (
-                <div style={{ marginTop: "18px" }}>
-                  <strong>Surse utilizate:</strong>
-
-                  <div style={styles.resultsBox}>
-                    {aiSources.map((source) => (
-                      <div key={source.id} style={styles.resultItem}>
-                        <strong>{source.fileName}</strong>
-
-                        <p style={styles.docMeta}>
-                          Relevanță: {source.score.toFixed(3)}
-                        </p>
-
-                        <a
-                          href={source.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          style={styles.previewBtn}
-                        >
-                          Preview
-                        </a>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
         </section>
 
         <section style={styles.docsSection}>
@@ -354,6 +319,15 @@ function Dashboard() {
           )}
         </section>
       </main>
+
+      <AiStickyNote
+        answer={aiAnswer}
+        sources={aiSources}
+        onClose={() => {
+          setAiAnswer("");
+          setAiSources([]);
+        }}
+      />
     </div>
   );
 }
@@ -566,20 +540,6 @@ const styles = {
     border: "1px solid #1e293b",
     borderRadius: "14px",
     padding: "16px",
-  },
-
-  aiAnswerBox: {
-    marginTop: "20px",
-    backgroundColor: "#0f172a",
-    border: "1px solid #1e293b",
-    borderRadius: "14px",
-    padding: "20px",
-  },
-
-  aiAnswerText: {
-    color: "#e2e8f0",
-    lineHeight: 1.7,
-    whiteSpace: "pre-wrap",
   },
 };
 
