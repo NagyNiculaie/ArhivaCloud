@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { getToken, getUser, logout } from "../Utils/auth";
 import { useNavigate } from "react-router-dom";
-import AiStickyNote from "../Components/AiStickyNote";
+import AiStickyNote from "../components/AiStickyNote";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
