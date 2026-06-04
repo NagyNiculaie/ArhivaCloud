@@ -42,6 +42,15 @@ const PROCESSING_LABELS = {
   failed: "Eroare procesare",
 };
 
+
+const STATUS_FILTER_LABELS = {
+  all: "Toate statusurile",
+  done: "Procesate",
+  processing: "În procesare",
+  failed: "Cu eroare",
+  uploaded: "Încărcate",
+};
+
 function formatCategory(category) {
   return CATEGORY_LABELS[category] || category || "Altul";
 }
@@ -125,6 +134,7 @@ function Dashboard() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [yearFilter, setYearFilter] = useState("all");
   const [monthFilter, setMonthFilter] = useState("all");
+  const [processingStatusFilter, setProcessingStatusFilter] = useState("all");
   const [supplierFilter, setSupplierFilter] = useState("");
 
   const loadDocs = async () => {
@@ -435,6 +445,11 @@ function Dashboard() {
     new Set(docs.map((doc) => doc.month).filter(Boolean))
   ).sort((a, b) => a - b);
 
+
+  const availableProcessingStatuses = Array.from(
+    new Set(docs.map((doc) => doc.processingStatus).filter(Boolean))
+  ).sort();
+
   const filteredDocs = docs.filter((doc) => {
     const matchesCategory =
       categoryFilter === "all" || doc.category === categoryFilter;
@@ -445,6 +460,10 @@ function Dashboard() {
     const matchesMonth =
       monthFilter === "all" || String(doc.month) === String(monthFilter);
 
+    const matchesProcessingStatus =
+      processingStatusFilter === "all" ||
+      doc.processingStatus === processingStatusFilter;
+
     const matchesSupplier =
       !supplierFilter.trim() ||
       normalizeText(doc.supplier).includes(normalizeText(supplierFilter)) ||
@@ -452,7 +471,13 @@ function Dashboard() {
         normalizeText(supplierFilter)
       );
 
-    return matchesCategory && matchesYear && matchesMonth && matchesSupplier;
+    return (
+      matchesCategory &&
+      matchesYear &&
+      matchesMonth &&
+      matchesProcessingStatus &&
+      matchesSupplier
+    );
   });
 
   const classifiedCount = docs.filter(
@@ -471,6 +496,7 @@ function Dashboard() {
     setCategoryFilter("all");
     setYearFilter("all");
     setMonthFilter("all");
+    setProcessingStatusFilter("all");
     setSupplierFilter("");
   };
 
@@ -938,6 +964,23 @@ function Dashboard() {
             </div>
 
             <div style={styles.filterGroup}>
+              <label style={styles.filterLabel}>Status procesare</label>
+              <select
+                value={processingStatusFilter}
+                onChange={(e) => setProcessingStatusFilter(e.target.value)}
+                style={styles.filterInput}
+              >
+                <option value="all">Toate statusurile</option>
+                {availableProcessingStatuses.map((status) => (
+                  <option value={status} key={status}>
+                    {STATUS_FILTER_LABELS[status] ||
+                      formatProcessingStatus(status)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div style={styles.filterGroup}>
               <label style={styles.filterLabel}>Furnizor / fișier</label>
               <input
                 value={supplierFilter}
@@ -951,6 +994,13 @@ function Dashboard() {
               Resetează filtre
             </button>
           </div>
+
+          {processingStatusFilter !== "all" && (
+            <p style={styles.activeFilterHint}>
+              Filtru activ: {STATUS_FILTER_LABELS[processingStatusFilter] ||
+                formatProcessingStatus(processingStatusFilter)}
+            </p>
+          )}
 
           {docs.length === 0 ? (
             <div style={styles.emptyBox}>Nu există documente încă.</div>
@@ -1421,6 +1471,13 @@ const styles = {
   aiHistoryInfo: {
     marginTop: "12px",
     color: "#94a3b8",
+    fontSize: "14px",
+  },
+
+
+  activeFilterHint: {
+    margin: "0 0 16px",
+    color: "#fbbf24",
     fontSize: "14px",
   },
 
