@@ -265,6 +265,9 @@ function Dashboard() {
       });
 
       let uploadedCount = 0;
+      let duplicateCount = 0;
+      let failedCount = 0;
+      const failedFiles = [];
 
       for (let i = 0; i < selectedFiles.length; i++) {
         const currentFile = selectedFiles[i];
@@ -278,18 +281,52 @@ function Dashboard() {
           `Se încarcă ${i + 1}/${selectedFiles.length}: ${currentFile.name}`
         );
 
-        const res = await uploadSingleFile(currentFile);
+        try {
+          const res = await uploadSingleFile(currentFile);
 
-        console.log("Upload OK:", res.data);
-        uploadedCount++;
+          console.log("Upload OK:", res.data);
+          uploadedCount++;
 
-        await loadDocs();
+          await loadDocs();
+        } catch (err) {
+          const isDuplicate = err.response?.status === 409 && err.response?.data?.duplicate;
+
+          if (isDuplicate) {
+            duplicateCount++;
+            console.warn("Document duplicat ignorat:", currentFile.name);
+          } else {
+            failedCount++;
+            failedFiles.push(currentFile.name);
+            console.error("Eroare upload pentru fișier:", currentFile.name, err);
+          }
+        }
       }
 
-      setMessage(
-        `${uploadedCount} document(e) încărcate. Analiza AI rulează în fundal.`
-      );
-      clearSelectedFiles();
+      const messageParts = [];
+
+      if (uploadedCount > 0) {
+        messageParts.push(
+          `${uploadedCount} document(e) încărcate. Analiza AI rulează în fundal.`
+        );
+      }
+
+      if (duplicateCount > 0) {
+        messageParts.push(
+          `${duplicateCount} document(e) duplicate ignorate.`
+        );
+      }
+
+      if (failedCount > 0) {
+        messageParts.push(
+          `${failedCount} document(e) nu au putut fi încărcate: ${failedFiles.join(", ")}.`
+        );
+      }
+
+      setMessage(messageParts.join(" "));
+
+      if (uploadedCount > 0 || duplicateCount > 0) {
+        clearSelectedFiles();
+      }
 
       await loadDocs();
     } catch (err) {
@@ -305,6 +342,7 @@ function Dashboard() {
       });
     }
   };
+
 
   const deleteDocument = async (id) => {
     try {

@@ -1,6 +1,7 @@
 const auth = require("../middleware/auth");
 const express = require("express");
 const multer = require("multer");
+const crypto = require("crypto");
 const supabase = require("../config/supabase");
 const Document = require("../models/Document");
 const DocumentChunk = require("../models/DocumentChunk");
@@ -33,6 +34,11 @@ const EXTRACT_TEXT_TIMEOUT_MS = Number(
 const LARGE_PDF_NATIVE_EXTRACT_LIMIT_BYTES = Number(
   process.env.LARGE_PDF_NATIVE_EXTRACT_LIMIT_BYTES || 3 * 1024 * 1024
 );
+
+
+function calculateFileHash(buffer) {
+  return crypto.createHash("sha256").update(buffer).digest("hex");
+}
 
 function splitTextIntoChunks(text, maxLength = 1200) {
   if (!text) return [];
@@ -474,6 +480,42 @@ router.post("/upload", auth, upload.single("file"), async (req, res) => {
     console.log("FILE:", req.file.originalname, req.file.mimetype, req.file.size);
     console.log("USER:", req.user.userId);
 
+
+    const fileHash = calculateFileHash(req.file.buffer);
+
+    console.log("FILE HASH:", fileHash);
+
+    const existingDocument = await Document.findOne({
+      owner: req.user.userId,
+      "file.hash": fileHash,
+    });
+
+    if (existingDocument) {
+      console.log(
+        "DUPLICATE DOCUMENT DETECTED:",
+        existingDocument._id.toString()
+      );
+
+      return res.status(409).json({
+        ok: false,
+        duplicate: true,
+        error: "Documentul există deja în arhivă.",
+        message: "Documentul există deja în arhivă și nu a fost încărcat din nou.",
+        existingDocument: {
+          id: existingDocument._id,
+          fileName: existingDocument.file?.originalName,
+          url: existingDocument.file?.url,
+          category: existingDocument.category,
+          supplier: existingDocument.supplier,
+          year: existingDocument.year,
+          month: existingDocument.month,
+          processingStatus: existingDocument.processingStatus,
+          classificationStatus: existingDocument.classificationStatus,
+          createdAt: existingDocument.createdAt,
+        },
+      });
+    }
+
     const safeName = req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
     const filePath = `${req.user.userId}/${Date.now()}-${safeName}`;
 
@@ -502,6 +544,7 @@ router.post("/upload", auth, upload.single("file"), async (req, res) => {
         size: req.file.size,
         url: publicData.publicUrl,
         publicId: filePath,
+        hash: fileHash,
       },
 
       extractedText: "",
@@ -547,6 +590,14 @@ router.post("/upload", auth, upload.single("file"), async (req, res) => {
     });
   } catch (e) {
     console.error("UPLOAD ERROR:", e);
+
+    if (e.code === 11000) {
+      return res.status(409).json({
+        ok: false,
+        duplicate: true,
+        error: "Documentul există deja în arhivă.",
+      });
+    }
 
     res.status(500).json({
       ok: false,

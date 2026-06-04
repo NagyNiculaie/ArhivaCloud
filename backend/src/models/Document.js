@@ -15,6 +15,13 @@ const DocumentSchema = new mongoose.Schema(
       size: Number,
       url: String,
       publicId: String,
+
+      // Hash SHA-256 pentru detectarea documentelor duplicate
+      hash: {
+        type: String,
+        default: "",
+        index: true,
+      },
     },
 
     extractedText: {
@@ -127,5 +134,18 @@ DocumentSchema.index({ owner: 1, year: 1, month: 1, category: 1 });
 DocumentSchema.index({ owner: 1, supplier: 1 });
 DocumentSchema.index({ owner: 1, processingStatus: 1 });
 DocumentSchema.index({ owner: 1, createdAt: -1 });
+
+// Un utilizator nu poate avea același fișier încărcat de două ori.
+// Sparse permite documentelor vechi, care nu au hash, să rămână valide.
+DocumentSchema.index(
+  { owner: 1, "file.hash": 1 },
+  {
+    unique: true,
+    sparse: true,
+    partialFilterExpression: {
+      "file.hash": { $type: "string", $gt: "" },
+    },
+  }
+);
 
 module.exports = mongoose.model("Document", DocumentSchema);
