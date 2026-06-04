@@ -21,6 +21,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 const BUCKET_NAME = "Documente";
 const MIN_TEXT_LENGTH_FOR_AI = 40;
+const EMBEDDING_CONCURRENCY = Number(process.env.EMBEDDING_CONCURRENCY || 3);
 
 function splitTextIntoChunks(text, maxLength = 1200) {
   if (!text) return [];
@@ -206,7 +207,194 @@ async function extractTextWithOpenAIOCR({ buffer, mimeType, fileName }) {
   }
 }
 
-// Upload document
+async function createChunksWithEmbeddings({ chunks, owner, documentId }) {
+  if (!chunks.length) return 0;
+
+  let totalCreated = 0;
+
+  for (let start = 0; start < chunks.length; start += EMBEDDING_CONCURRENCY) {
+    const batch = chunks.slice(start, start + EMBEDDING_CONCURRENCY);
+
+    const chunkDocs = await Promise.all(
+      batch.map(async (chunkText, batchIndex) => {
+        const chunkIndex = start + batchIndex;
+
+        console.log("PROCESSING CHUNK:", chunkIndex + 1, "/", chunks.length);
+
+        const chunkEmbedding = await embedText(chunkText);
+
+        if (!chunkEmbedding || !Array.isArray(chunkEmbedding)) {
+          throw new Error(`Embedding invalid pentru chunk-ul ${chunkIndex}`);
+        }
+
+        return {
+          owner,
+          document: documentId,
+          chunkIndex,
+          text: chunkText,
+          embedding: chunkEmbedding,
+        };
+      })
+    );
+
+    await DocumentChunk.insertMany(chunkDocs);
+    totalCreated += chunkDocs.length;
+
+    console.log(
+      "CHUNK BATCH SAVED:",
+      totalCreated,
+      "/",
+      chunks.length,
+      "for document",
+      documentId.toString()
+    );
+  }
+
+  return totalCreated;
+}
+
+async function processDocumentInBackground({
+  documentId,
+  owner,
+  buffer,
+  mimeType,
+  fileName,
+}) {
+  try {
+    console.log("BACKGROUND PROCESS START:", documentId.toString());
+
+    await Document.findOneAndUpdate(
+      { _id: documentId, owner },
+      {
+        processingStatus: "processing",
+        processingError: "",
+        classificationStatus: "pending",
+      }
+    );
+
+    let text = await extractText({
+      buffer,
+      mimeType,
+    });
+
+    console.log("TEXT EXTRAS LENGTH:", text?.length || 0);
+
+    if (!text || !text.trim() || text.trim().length < MIN_TEXT_LENGTH_FOR_AI) {
+      console.log("TEXT EMPTY OR TOO SHORT. TRYING OPENAI OCR...");
+
+      const ocrText = await extractTextWithOpenAIOCR({
+        buffer,
+        mimeType,
+        fileName,
+      });
+
+      if (ocrText && ocrText.trim()) {
+        text = ocrText;
+      }
+
+      console.log("TEXT AFTER OPENAI OCR LENGTH:", text?.length || 0);
+    }
+
+    let classification = {
+      category: "altul",
+      documentDate: null,
+      year: null,
+      month: null,
+      supplier: "",
+      totalAmount: null,
+      currency: "RON",
+      tags: [],
+      aiSummary: text?.trim()
+        ? ""
+        : "Document încărcat, dar nu s-a putut extrage text suficient pentru clasificare.",
+      classificationConfidence: 0,
+      classificationStatus: text?.trim() ? "pending" : "failed",
+    };
+
+    if (text && text.trim()) {
+      console.log("CLASSIFYING DOCUMENT...");
+
+      classification = await classifyDocument({
+        text,
+        fileName,
+      });
+
+      console.log("DOCUMENT CLASSIFICATION:", classification);
+    } else {
+      console.log("NO TEXT EXTRACTED. DOCUMENT WILL BE SAVED WITHOUT CHUNKS.");
+    }
+
+    const existingDoc = await Document.findOne({ _id: documentId, owner });
+
+    if (!existingDoc) {
+      console.log("DOCUMENT WAS DELETED BEFORE PROCESSING FINISHED:", documentId);
+      return;
+    }
+
+    await Document.findOneAndUpdate(
+      { _id: documentId, owner },
+      {
+        extractedText: text || "",
+        category: classification.category,
+        documentDate: classification.documentDate,
+        year: classification.year,
+        month: classification.month,
+        supplier: classification.supplier,
+        totalAmount: classification.totalAmount,
+        currency: classification.currency,
+        tags: classification.tags,
+        aiSummary: classification.aiSummary,
+        classificationConfidence: classification.classificationConfidence,
+        classificationStatus: classification.classificationStatus,
+      }
+    );
+
+    await DocumentChunk.deleteMany({
+      document: documentId,
+      owner,
+    });
+
+    const chunks = splitTextIntoChunks(text || "");
+
+    console.log("CHUNKS CREATED:", chunks.length);
+
+    if (chunks.length > 0) {
+      await createChunksWithEmbeddings({
+        chunks,
+        owner,
+        documentId,
+      });
+    }
+
+    await Document.findOneAndUpdate(
+      { _id: documentId, owner },
+      {
+        processingStatus: chunks.length > 0 || text?.trim() ? "done" : "failed",
+        processingError:
+          chunks.length > 0 || text?.trim()
+            ? ""
+            : "Nu s-a putut extrage text pentru procesarea AI.",
+        processedAt: new Date(),
+      }
+    );
+
+    console.log("BACKGROUND PROCESS DONE:", documentId.toString());
+  } catch (error) {
+    console.error("BACKGROUND PROCESS ERROR:", error);
+
+    await Document.findOneAndUpdate(
+      { _id: documentId, owner },
+      {
+        processingStatus: "failed",
+        classificationStatus: "failed",
+        processingError: error.message,
+        processedAt: new Date(),
+      }
+    );
+  }
+}
+
+// Upload document - rapid, cu procesare AI în fundal
 router.post("/upload", auth, upload.single("file"), async (req, res) => {
   try {
     if (!req.file) {
@@ -239,58 +427,6 @@ router.post("/upload", auth, upload.single("file"), async (req, res) => {
       .from(BUCKET_NAME)
       .getPublicUrl(filePath);
 
-    let text = await extractText({
-      buffer: req.file.buffer,
-      mimeType: req.file.mimetype,
-    });
-
-    console.log("TEXT EXTRAS LENGTH:", text?.length || 0);
-
-    if (!text || !text.trim() || text.trim().length < MIN_TEXT_LENGTH_FOR_AI) {
-      console.log("TEXT EMPTY OR TOO SHORT. TRYING OPENAI OCR...");
-
-      const ocrText = await extractTextWithOpenAIOCR({
-        buffer: req.file.buffer,
-        mimeType: req.file.mimetype,
-        fileName: req.file.originalname,
-      });
-
-      if (ocrText && ocrText.trim()) {
-        text = ocrText;
-      }
-
-      console.log("TEXT AFTER OPENAI OCR LENGTH:", text?.length || 0);
-    }
-
-    let classification = {
-      category: "altul",
-      documentDate: null,
-      year: null,
-      month: null,
-      supplier: "",
-      totalAmount: null,
-      currency: "RON",
-      tags: [],
-      aiSummary: text?.trim()
-        ? ""
-        : "Document încărcat, dar nu s-a putut extrage text suficient pentru clasificare.",
-      classificationConfidence: 0,
-      classificationStatus: text?.trim() ? "pending" : "failed",
-    };
-
-    if (text && text.trim()) {
-      console.log("CLASSIFYING DOCUMENT...");
-
-      classification = await classifyDocument({
-        text,
-        fileName: req.file.originalname,
-      });
-
-      console.log("DOCUMENT CLASSIFICATION:", classification);
-    } else {
-      console.log("NO TEXT EXTRACTED. DOCUMENT WILL BE SAVED WITHOUT CHUNKS.");
-    }
-
     const doc = await Document.create({
       owner: req.user.userId,
 
@@ -302,61 +438,46 @@ router.post("/upload", auth, upload.single("file"), async (req, res) => {
         publicId: filePath,
       },
 
-      extractedText: text || "",
+      extractedText: "",
 
-      category: classification.category,
-      documentDate: classification.documentDate,
-      year: classification.year,
-      month: classification.month,
-      supplier: classification.supplier,
-      totalAmount: classification.totalAmount,
-      currency: classification.currency,
-      tags: classification.tags,
-      aiSummary: classification.aiSummary,
-      classificationConfidence: classification.classificationConfidence,
-      classificationStatus: classification.classificationStatus,
+      category: "altul",
+      documentDate: null,
+      year: null,
+      month: null,
+      supplier: "",
+      totalAmount: null,
+      currency: "RON",
+      tags: [],
+      aiSummary: "Documentul este în curs de procesare AI.",
+      classificationConfidence: 0,
+      classificationStatus: "pending",
+      processingStatus: "processing",
+      processingError: "",
+      processedAt: null,
     });
 
-    console.log("DOCUMENT SAVED:", doc._id.toString());
+    console.log("DOCUMENT SAVED QUICKLY:", doc._id.toString());
 
-    const chunks = splitTextIntoChunks(text || "");
-
-    console.log("CHUNKS CREATED:", chunks.length);
-
-    if (chunks.length === 0) {
-      return res.json({
-        ok: true,
-        document: doc,
-        chunksCreated: 0,
-        warning:
-          "Documentul a fost încărcat, dar nu s-a putut extrage text pentru căutare AI.",
-      });
-    }
-
-    for (let i = 0; i < chunks.length; i++) {
-      console.log("PROCESSING CHUNK:", i + 1, "/", chunks.length);
-
-      const chunkEmbedding = await embedText(chunks[i]);
-
-      if (!chunkEmbedding || !Array.isArray(chunkEmbedding)) {
-        throw new Error(`Embedding invalid pentru chunk-ul ${i}`);
-      }
-
-      const createdChunk = await DocumentChunk.create({
-        owner: req.user.userId,
-        document: doc._id,
-        chunkIndex: i,
-        text: chunks[i],
-        embedding: chunkEmbedding,
-      });
-
-      console.log("CHUNK SAVED:", createdChunk._id.toString());
-    }
-
-    res.json({
+    res.status(202).json({
       ok: true,
       document: doc,
-      chunksCreated: chunks.length,
+      processing: true,
+      message:
+        "Document încărcat cu succes. Analiza AI rulează în fundal și va apărea în arhivă când se finalizează.",
+    });
+
+    const bufferCopy = Buffer.from(req.file.buffer);
+
+    setImmediate(() => {
+      processDocumentInBackground({
+        documentId: doc._id,
+        owner: req.user.userId,
+        buffer: bufferCopy,
+        mimeType: req.file.mimetype,
+        fileName: req.file.originalname,
+      }).catch((error) => {
+        console.error("UNHANDLED BACKGROUND ERROR:", error);
+      });
     });
   } catch (e) {
     console.error("UPLOAD ERROR:", e);
@@ -541,6 +662,20 @@ router.post("/ask", auth, async (req, res) => {
     }).populate("document");
 
     if (chunks.length === 0) {
+      const processingCount = await Document.countDocuments({
+        owner: req.user.userId,
+        processingStatus: "processing",
+      });
+
+      if (processingCount > 0) {
+        return res.json({
+          ok: true,
+          answer:
+            "Documentele tale încă se procesează. Te rog așteaptă câteva momente și încearcă din nou.",
+          sources: [],
+        });
+      }
+
       return res.json({
         ok: true,
         answer:
@@ -680,6 +815,7 @@ ${context}
           month: item.document.month,
           totalAmount: item.document.totalAmount,
           currency: item.document.currency,
+          processingStatus: item.document.processingStatus,
         });
       }
     }

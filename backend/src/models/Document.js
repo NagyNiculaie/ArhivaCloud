@@ -28,6 +28,24 @@ const DocumentSchema = new mongoose.Schema(
       default: [],
     },
 
+    // Status general de procesare
+    processingStatus: {
+      type: String,
+      enum: ["uploaded", "processing", "done", "failed"],
+      default: "uploaded",
+      index: true,
+    },
+
+    processingError: {
+      type: String,
+      default: "",
+    },
+
+    processedAt: {
+      type: Date,
+      default: null,
+    },
+
     // Clasificare document
     category: {
       type: String,
@@ -40,6 +58,7 @@ const DocumentSchema = new mongoose.Schema(
         "declaratie",
         "stat_plata",
         "chitanta",
+        "ordin_plata",
         "altul",
       ],
       default: "altul",
@@ -106,6 +125,7 @@ const DocumentSchema = new mongoose.Schema(
 
 DocumentSchema.index({ owner: 1, year: 1, month: 1, category: 1 });
 DocumentSchema.index({ owner: 1, supplier: 1 });
+DocumentSchema.index({ owner: 1, processingStatus: 1 });
 DocumentSchema.index({ owner: 1, createdAt: -1 });
 
 module.exports = mongoose.model("Document", DocumentSchema);
