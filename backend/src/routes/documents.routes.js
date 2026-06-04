@@ -23,6 +23,17 @@ const BUCKET_NAME = "Documente";
 const MIN_TEXT_LENGTH_FOR_AI = 40;
 const EMBEDDING_CONCURRENCY = Number(process.env.EMBEDDING_CONCURRENCY || 3);
 
+// Dacă extractText stă prea mult pe PDF-uri scanate, trecem mai repede la OCR.
+const EXTRACT_TEXT_TIMEOUT_MS = Number(
+  process.env.EXTRACT_TEXT_TIMEOUT_MS || 12000
+);
+
+// Pentru PDF-uri mari scanate, încercarea clasică de extractText poate consuma timp inutil.
+// Default: dacă PDF-ul are peste 3 MB, mergem direct pe OpenAI OCR.
+const LARGE_PDF_NATIVE_EXTRACT_LIMIT_BYTES = Number(
+  process.env.LARGE_PDF_NATIVE_EXTRACT_LIMIT_BYTES || 3 * 1024 * 1024
+);
+
 function splitTextIntoChunks(text, maxLength = 1200) {
   if (!text) return [];
 
@@ -128,6 +139,60 @@ function getOpenAIResponseText(response) {
   }
 
   return "";
+}
+
+function withTimeout(promise, timeoutMs, timeoutMessage) {
+  let timeoutId;
+
+  const timeoutPromise = new Promise((resolve) => {
+    timeoutId = setTimeout(() => {
+      console.log(timeoutMessage);
+      resolve("");
+    }, timeoutMs);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    clearTimeout(timeoutId);
+  });
+}
+
+async function extractTextFast({ buffer, mimeType, fileName }) {
+  try {
+    if (!buffer || !mimeType) return "";
+
+    const isLargePdf =
+      mimeType === "application/pdf" &&
+      buffer.length >= LARGE_PDF_NATIVE_EXTRACT_LIMIT_BYTES;
+
+    if (isLargePdf) {
+      console.log(
+        "SKIPPING NATIVE PDF TEXT EXTRACTION FOR LARGE PDF:",
+        fileName,
+        buffer.length,
+        "bytes"
+      );
+
+      return "";
+    }
+
+    console.log("NATIVE TEXT EXTRACTION START:", fileName);
+
+    const text = await withTimeout(
+      extractText({
+        buffer,
+        mimeType,
+      }),
+      EXTRACT_TEXT_TIMEOUT_MS,
+      `NATIVE TEXT EXTRACTION TIMEOUT AFTER ${EXTRACT_TEXT_TIMEOUT_MS}ms`
+    );
+
+    console.log("NATIVE TEXT EXTRACTION DONE LENGTH:", text?.length || 0);
+
+    return text || "";
+  } catch (error) {
+    console.error("NATIVE TEXT EXTRACTION ERROR:", error.message);
+    return "";
+  }
 }
 
 async function extractTextWithOpenAIOCR({ buffer, mimeType, fileName }) {
@@ -272,9 +337,10 @@ async function processDocumentInBackground({
       }
     );
 
-    let text = await extractText({
+    let text = await extractTextFast({
       buffer,
       mimeType,
+      fileName,
     });
 
     console.log("TEXT EXTRAS LENGTH:", text?.length || 0);
