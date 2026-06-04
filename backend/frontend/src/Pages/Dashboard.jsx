@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import axios from "axios";
+import ExcelJS from "exceljs";
 import { getToken, getUser, logout } from "../Utils/auth";
 import { useNavigate } from "react-router-dom";
 import AiStickyNote from "../components/AiStickyNote";
@@ -76,23 +77,6 @@ function formatFileSize(size) {
   }
 
   return `${(size / (1024 * 1024)).toFixed(2)} MB`;
-}
-
-
-function csvEscape(value) {
-  if (value === null || value === undefined) return "";
-
-  const stringValue = String(value).replace(/\r?\n|\r/g, " ").trim();
-
-  if (
-    stringValue.includes(";") ||
-    stringValue.includes('"') ||
-    stringValue.includes(",")
-  ) {
-    return `"${stringValue.replace(/"/g, '""')}"`;
-  }
-
-  return stringValue;
 }
 
 function normalizeText(value = "") {
@@ -491,54 +475,138 @@ function Dashboard() {
   };
 
 
-  const exportDocumentsToCsv = () => {
+  const exportDocumentsToExcel = async () => {
     if (filteredDocs.length === 0) {
       setMessage("Nu există documente de exportat pentru filtrele selectate.");
       return;
     }
 
-    const headers = [
-      "Nume fișier",
-      "Categorie",
-      "Status procesare",
-      "Status clasificare",
-      "Furnizor",
-      "Data document",
-      "An",
-      "Lună",
-      "Total",
-      "Monedă",
-      "Rezumat IA",
-      "Taguri",
-      "URL document",
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "Arhiva Cloud";
+    workbook.created = new Date();
+
+    const worksheet = workbook.addWorksheet("Documente");
+
+    worksheet.columns = [
+      { header: "Nume fișier", key: "fileName", width: 42 },
+      { header: "Categorie", key: "category", width: 18 },
+      { header: "Status procesare", key: "processingStatus", width: 18 },
+      { header: "Status clasificare", key: "classificationStatus", width: 18 },
+      { header: "Furnizor", key: "supplier", width: 32 },
+      { header: "Data document", key: "documentDate", width: 16 },
+      { header: "An", key: "year", width: 10 },
+      { header: "Lună", key: "month", width: 16 },
+      { header: "Total", key: "totalAmount", width: 14 },
+      { header: "Monedă", key: "currency", width: 10 },
+      { header: "Rezumat IA", key: "aiSummary", width: 46 },
+      { header: "Taguri", key: "tags", width: 34 },
+      { header: "URL document", key: "url", width: 70 },
     ];
 
-    const rows = filteredDocs.map((doc) => [
-      doc.file?.originalName || "",
-      formatCategory(doc.category),
-      formatProcessingStatus(doc.processingStatus),
-      doc.classificationStatus || "",
-      doc.supplier || "",
-      formatDate(doc.documentDate),
-      doc.year || "",
-      doc.month ? MONTH_LABELS[doc.month] || doc.month : "",
-      typeof doc.totalAmount === "number" ? doc.totalAmount : "",
-      doc.currency || "",
-      doc.aiSummary || "",
-      Array.isArray(doc.tags) ? doc.tags.join(", ") : "",
-      doc.file?.url || "",
-    ]);
+    filteredDocs.forEach((doc) => {
+      worksheet.addRow({
+        fileName: doc.file?.originalName || "",
+        category: formatCategory(doc.category),
+        processingStatus: formatProcessingStatus(doc.processingStatus),
+        classificationStatus: doc.classificationStatus || "",
+        supplier: doc.supplier || "",
+        documentDate: formatDate(doc.documentDate),
+        year: doc.year || "",
+        month: doc.month ? MONTH_LABELS[doc.month] || doc.month : "",
+        totalAmount:
+          typeof doc.totalAmount === "number" ? doc.totalAmount : "",
+        currency: doc.currency || "",
+        aiSummary: doc.aiSummary || "",
+        tags: Array.isArray(doc.tags) ? doc.tags.join(", ") : "",
+        url: doc.file?.url || "",
+      });
+    });
 
-    const csvContent = [headers, ...rows]
-      .map((row) => row.map(csvEscape).join(";"))
-      .join("\n");
+    worksheet.views = [{ state: "frozen", ySplit: 1 }];
+    worksheet.autoFilter = {
+      from: "A1",
+      to: "M1",
+    };
 
-    const blob = new Blob(["\ufeff" + csvContent], {
-      type: "text/csv;charset=utf-8;",
+    const headerRow = worksheet.getRow(1);
+    headerRow.height = 24;
+
+    headerRow.eachCell((cell) => {
+      cell.font = {
+        bold: true,
+        color: { argb: "FFFFFFFF" },
+      };
+      cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FF1D4ED8" },
+      };
+      cell.alignment = {
+        vertical: "middle",
+        horizontal: "center",
+        wrapText: true,
+      };
+      cell.border = {
+        top: { style: "thin", color: { argb: "FFCBD5E1" } },
+        left: { style: "thin", color: { argb: "FFCBD5E1" } },
+        bottom: { style: "thin", color: { argb: "FFCBD5E1" } },
+        right: { style: "thin", color: { argb: "FFCBD5E1" } },
+      };
+    });
+
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return;
+
+      row.height = 42;
+
+      row.eachCell((cell) => {
+        cell.alignment = {
+          vertical: "top",
+          wrapText: true,
+        };
+        cell.border = {
+          top: { style: "thin", color: { argb: "FFE2E8F0" } },
+          left: { style: "thin", color: { argb: "FFE2E8F0" } },
+          bottom: { style: "thin", color: { argb: "FFE2E8F0" } },
+          right: { style: "thin", color: { argb: "FFE2E8F0" } },
+        };
+      });
+
+      if (rowNumber % 2 === 0) {
+        row.eachCell((cell) => {
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFF8FAFC" },
+          };
+        });
+      }
+    });
+
+    worksheet.getColumn("totalAmount").numFmt = '#,##0.00';
+    worksheet.getColumn("url").eachCell((cell, rowNumber) => {
+      if (rowNumber === 1 || !cell.value) return;
+
+      cell.value = {
+        text: "Deschide document",
+        hyperlink: cell.value,
+      };
+
+      cell.font = {
+        color: { argb: "FF2563EB" },
+        underline: true,
+      };
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    const blob = new Blob([buffer], {
+      type:
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
 
     const today = new Date().toISOString().slice(0, 10);
-    const fileName = `arhiva-documente-${today}.csv`;
+    const fileName = `arhiva-documente-${today}.xlsx`;
     const url = URL.createObjectURL(blob);
 
     const link = document.createElement("a");
@@ -550,7 +618,7 @@ function Dashboard() {
 
     URL.revokeObjectURL(url);
 
-    setMessage(`Export CSV generat: ${filteredDocs.length} document(e).`);
+    setMessage(`Export Excel generat: ${filteredDocs.length} document(e).`);
   };
 
   return (
@@ -810,8 +878,8 @@ function Dashboard() {
             </div>
 
             <div style={styles.docsHeaderActions}>
-              <button style={styles.exportBtn} onClick={exportDocumentsToCsv}>
-                Export CSV
+              <button style={styles.exportBtn} onClick={exportDocumentsToExcel}>
+                Export Excel
               </button>
 
               <button style={styles.secondaryBtn} onClick={loadDocs}>
