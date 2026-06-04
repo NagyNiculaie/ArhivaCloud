@@ -20,6 +20,7 @@ const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
 const BUCKET_NAME = "Documente";
+const MIN_TEXT_LENGTH_FOR_AI = 40;
 
 function splitTextIntoChunks(text, maxLength = 1200) {
   if (!text) return [];
@@ -112,6 +113,99 @@ function keywordMatchScore(questionTerms, text = "") {
   return matches / questionTerms.length;
 }
 
+function getOpenAIResponseText(response) {
+  if (response?.output_text) {
+    return response.output_text.trim();
+  }
+
+  if (Array.isArray(response?.output)) {
+    return response.output
+      .flatMap((item) => item.content || [])
+      .map((content) => content.text || "")
+      .join("\n")
+      .trim();
+  }
+
+  return "";
+}
+
+async function extractTextWithOpenAIOCR({ buffer, mimeType, fileName }) {
+  try {
+    if (!buffer || !mimeType) return "";
+
+    const base64File = buffer.toString("base64");
+    const model = process.env.OPENAI_OCR_MODEL || "gpt-4o-mini";
+
+    if (mimeType === "application/pdf") {
+      console.log("OPENAI OCR PDF START:", fileName);
+
+      const response = await openai.responses.create({
+        model,
+        input: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "input_file",
+                filename: fileName || "document.pdf",
+                file_data: `data:application/pdf;base64,${base64File}`,
+              },
+              {
+                type: "input_text",
+                text:
+                  "Extrage tot textul vizibil din acest PDF scanat. Răspunde doar cu textul extras, fără explicații, fără markdown.",
+              },
+            ],
+          },
+        ],
+        max_output_tokens: 6000,
+      });
+
+      const extracted = getOpenAIResponseText(response);
+
+      console.log("OPENAI OCR PDF LENGTH:", extracted.length);
+
+      return extracted;
+    }
+
+    if (/^image\//.test(mimeType)) {
+      console.log("OPENAI OCR IMAGE START:", fileName);
+
+      const response = await openai.responses.create({
+        model,
+        input: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "input_text",
+                text:
+                  "Extrage tot textul vizibil din această imagine scanată. Răspunde doar cu textul extras, fără explicații, fără markdown.",
+              },
+              {
+                type: "input_image",
+                image_url: `data:${mimeType};base64,${base64File}`,
+              },
+            ],
+          },
+        ],
+        max_output_tokens: 4000,
+      });
+
+      const extracted = getOpenAIResponseText(response);
+
+      console.log("OPENAI OCR IMAGE LENGTH:", extracted.length);
+
+      return extracted;
+    }
+
+    return "";
+  } catch (error) {
+    console.error("OPENAI OCR ERROR:", error.message);
+    return "";
+  }
+}
+
 // Upload document
 router.post("/upload", auth, upload.single("file"), async (req, res) => {
   try {
@@ -145,28 +239,57 @@ router.post("/upload", auth, upload.single("file"), async (req, res) => {
       .from(BUCKET_NAME)
       .getPublicUrl(filePath);
 
-    const text = await extractText({
+    let text = await extractText({
       buffer: req.file.buffer,
       mimeType: req.file.mimetype,
     });
 
     console.log("TEXT EXTRAS LENGTH:", text?.length || 0);
 
-    if (!text || !text.trim()) {
-      return res.status(400).json({
-        ok: false,
-        error: "Nu s-a putut extrage text din document.",
+    if (!text || !text.trim() || text.trim().length < MIN_TEXT_LENGTH_FOR_AI) {
+      console.log("TEXT EMPTY OR TOO SHORT. TRYING OPENAI OCR...");
+
+      const ocrText = await extractTextWithOpenAIOCR({
+        buffer: req.file.buffer,
+        mimeType: req.file.mimetype,
+        fileName: req.file.originalname,
       });
+
+      if (ocrText && ocrText.trim()) {
+        text = ocrText;
+      }
+
+      console.log("TEXT AFTER OPENAI OCR LENGTH:", text?.length || 0);
     }
 
-    console.log("CLASSIFYING DOCUMENT...");
+    let classification = {
+      category: "altul",
+      documentDate: null,
+      year: null,
+      month: null,
+      supplier: "",
+      totalAmount: null,
+      currency: "RON",
+      tags: [],
+      aiSummary: text?.trim()
+        ? ""
+        : "Document încărcat, dar nu s-a putut extrage text suficient pentru clasificare.",
+      classificationConfidence: 0,
+      classificationStatus: text?.trim() ? "pending" : "failed",
+    };
 
-    const classification = await classifyDocument({
-      text,
-      fileName: req.file.originalname,
-    });
+    if (text && text.trim()) {
+      console.log("CLASSIFYING DOCUMENT...");
 
-    console.log("DOCUMENT CLASSIFICATION:", classification);
+      classification = await classifyDocument({
+        text,
+        fileName: req.file.originalname,
+      });
+
+      console.log("DOCUMENT CLASSIFICATION:", classification);
+    } else {
+      console.log("NO TEXT EXTRACTED. DOCUMENT WILL BE SAVED WITHOUT CHUNKS.");
+    }
 
     const doc = await Document.create({
       owner: req.user.userId,
@@ -179,7 +302,7 @@ router.post("/upload", auth, upload.single("file"), async (req, res) => {
         publicId: filePath,
       },
 
-      extractedText: text,
+      extractedText: text || "",
 
       category: classification.category,
       documentDate: classification.documentDate,
@@ -196,7 +319,7 @@ router.post("/upload", auth, upload.single("file"), async (req, res) => {
 
     console.log("DOCUMENT SAVED:", doc._id.toString());
 
-    const chunks = splitTextIntoChunks(text);
+    const chunks = splitTextIntoChunks(text || "");
 
     console.log("CHUNKS CREATED:", chunks.length);
 
@@ -205,7 +328,8 @@ router.post("/upload", auth, upload.single("file"), async (req, res) => {
         ok: true,
         document: doc,
         chunksCreated: 0,
-        warning: "Documentul a fost încărcat, dar nu s-au creat chunks.",
+        warning:
+          "Documentul a fost încărcat, dar nu s-a putut extrage text pentru căutare AI.",
       });
     }
 
