@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 
 function renderInlineMarkdown(text) {
   const parts = text.split(/(\*\*.*?\*\*)/g);
@@ -60,6 +60,14 @@ function renderAnswer(answer) {
 }
 
 export default function AiStickyNote({ answer, sources, onClose }) {
+  const contentRef = useRef(null);
+
+  useEffect(() => {
+    if (contentRef.current) {
+      contentRef.current.scrollTop = 0;
+    }
+  }, [answer]);
+
   if (!answer) return null;
 
   return (
@@ -76,7 +84,7 @@ export default function AiStickyNote({ answer, sources, onClose }) {
           </button>
         </div>
 
-        <div style={styles.content} className="ai-note-scroll">
+        <div ref={contentRef} style={styles.content} className="ai-note-scroll">
           <div style={styles.answerText}>{renderAnswer(answer)}</div>
 
           {sources?.length > 0 && (
