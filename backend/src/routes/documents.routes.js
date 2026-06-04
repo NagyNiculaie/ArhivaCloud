@@ -1,7 +1,7 @@
 const auth = require("../middleware/auth");
 const express = require("express");
 const multer = require("multer");
-const supabase = require("../config/cloudinary");
+const supabase = require("../config/supabase");
 const Document = require("../models/Document");
 const DocumentChunk = require("../models/DocumentChunk");
 const { extractText } = require("../services/extractText.service");
@@ -43,9 +43,14 @@ router.post("/upload", auth, upload.single("file"), async (req, res) => {
       });
     }
 
+    console.log("UPLOAD START");
+    console.log("FILE:", req.file.originalname, req.file.mimetype, req.file.size);
+    console.log("USER:", req.user.userId);
+
     const safeName = req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
     const filePath = `${req.user.userId}/${Date.now()}-${safeName}`;
 
+    // 1. Upload în Supabase Storage
     const { error: uploadError } = await supabase.storage
       .from(BUCKET_NAME)
       .upload(filePath, req.file.buffer, {
@@ -54,6 +59,7 @@ router.post("/upload", auth, upload.single("file"), async (req, res) => {
       });
 
     if (uploadError) {
+      console.error("SUPABASE UPLOAD ERROR:", uploadError);
       throw new Error(uploadError.message);
     }
 
@@ -61,16 +67,22 @@ router.post("/upload", auth, upload.single("file"), async (req, res) => {
       .from(BUCKET_NAME)
       .getPublicUrl(filePath);
 
+    // 2. Extrage textul din fișier
     const text = await extractText({
       buffer: req.file.buffer,
       mimeType: req.file.mimetype,
     });
 
-    const embedding = await embedText(text);
+    console.log("TEXT EXTRAS LENGTH:", text?.length || 0);
 
-    console.log("TEXT EXTRAS LENGTH:", text.length);
-    console.log("EMBEDDING LENGTH:", embedding.length);
+    if (!text || !text.trim()) {
+      return res.status(400).json({
+        ok: false,
+        error: "Nu s-a putut extrage text din document.",
+      });
+    }
 
+    // 3. Salvează documentul FĂRĂ embedding pe tot textul
     const doc = await Document.create({
       owner: req.user.userId,
 
@@ -83,26 +95,44 @@ router.post("/upload", auth, upload.single("file"), async (req, res) => {
       },
 
       extractedText: text,
-      embedding,
     });
 
+    console.log("DOCUMENT SAVED:", doc._id.toString());
+
+    // 4. Împarte textul în chunks
     const chunks = splitTextIntoChunks(text);
 
     console.log("CHUNKS CREATED:", chunks.length);
 
+    if (chunks.length === 0) {
+      return res.json({
+        ok: true,
+        document: doc,
+        chunksCreated: 0,
+        warning: "Documentul a fost încărcat, dar nu s-au creat chunks.",
+      });
+    }
+
+    // 5. Creează embedding pentru fiecare chunk
     for (let i = 0; i < chunks.length; i++) {
-  const chunkEmbedding = await embedText(chunks[i]);
+      console.log("PROCESSING CHUNK:", i + 1, "/", chunks.length);
 
-  const createdChunk = await DocumentChunk.create({
-    owner: req.user.userId,
-    document: doc._id,
-    chunkIndex: i,
-    text: chunks[i],
-    embedding: chunkEmbedding,
-  });
+      const chunkEmbedding = await embedText(chunks[i]);
 
-  console.log("CHUNK SAVED:", createdChunk._id.toString());
-}
+      if (!chunkEmbedding || !Array.isArray(chunkEmbedding)) {
+        throw new Error(`Embedding invalid pentru chunk-ul ${i}`);
+      }
+
+      const createdChunk = await DocumentChunk.create({
+        owner: req.user.userId,
+        document: doc._id,
+        chunkIndex: i,
+        text: chunks[i],
+        embedding: chunkEmbedding,
+      });
+
+      console.log("CHUNK SAVED:", createdChunk._id.toString());
+    }
 
     res.json({
       ok: true,
@@ -110,7 +140,12 @@ router.post("/upload", auth, upload.single("file"), async (req, res) => {
       chunksCreated: chunks.length,
     });
   } catch (e) {
-    res.status(500).json({ ok: false, error: e.message });
+    console.error("UPLOAD ERROR:", e);
+
+    res.status(500).json({
+      ok: false,
+      error: e.message,
+    });
   }
 });
 
