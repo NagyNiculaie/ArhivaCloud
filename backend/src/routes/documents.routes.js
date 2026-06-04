@@ -487,7 +487,17 @@ router.post("/upload", auth, upload.single("file"), async (req, res) => {
 
     const existingDocument = await Document.findOne({
       owner: req.user.userId,
-      "file.hash": fileHash,
+      $or: [
+        // Pentru documentele noi, verificarea principală este hash-ul exact al fișierului.
+        { "file.hash": fileHash },
+
+        // Pentru documentele vechi, încărcate înainte să adăugăm hash,
+        // verificăm fallback pe nume + dimensiune.
+        {
+          "file.originalName": req.file.originalname,
+          "file.size": req.file.size,
+        },
+      ],
     });
 
     if (existingDocument) {
@@ -500,7 +510,8 @@ router.post("/upload", auth, upload.single("file"), async (req, res) => {
         ok: false,
         duplicate: true,
         error: "Documentul există deja în arhivă.",
-        message: "Documentul există deja în arhivă și nu a fost încărcat din nou.",
+        message:
+          "Documentul există deja în arhivă și nu a fost încărcat din nou.",
         existingDocument: {
           id: existingDocument._id,
           fileName: existingDocument.file?.originalName,
@@ -703,6 +714,122 @@ router.post("/:id/reprocess", auth, async (req, res) => {
     });
   } catch (err) {
     console.error("REPROCESS ERROR:", err);
+
+    res.status(500).json({
+      ok: false,
+      error: err.message,
+    });
+  }
+});
+
+
+// Statistici exacte pentru arhivă
+router.get("/stats", auth, async (req, res) => {
+  try {
+    const docs = await Document.find({ owner: req.user.userId })
+      .select(
+        "category supplier year month totalAmount currency processingStatus classificationStatus file.originalName file.url createdAt"
+      )
+      .lean();
+
+    const stats = {
+      totalDocuments: docs.length,
+
+      processing: {
+        uploaded: 0,
+        processing: 0,
+        done: 0,
+        failed: 0,
+      },
+
+      classification: {
+        pending: 0,
+        classified: 0,
+        failed: 0,
+      },
+
+      categories: {},
+      years: {},
+      months: {},
+      suppliers: {},
+      totalsByCurrency: {},
+      documentsWithAmount: 0,
+      documentsWithoutAmount: 0,
+      lastUpdated: new Date(),
+    };
+
+    for (const doc of docs) {
+      const processingStatus = doc.processingStatus || "uploaded";
+      const classificationStatus = doc.classificationStatus || "pending";
+      const category = doc.category || "altul";
+      const supplier = doc.supplier?.trim() || "Necunoscut";
+      const year = doc.year ? String(doc.year) : "Necunoscut";
+      const month = doc.month ? String(doc.month) : "Necunoscut";
+      const currency = doc.currency || "RON";
+
+      stats.processing[processingStatus] =
+        (stats.processing[processingStatus] || 0) + 1;
+
+      stats.classification[classificationStatus] =
+        (stats.classification[classificationStatus] || 0) + 1;
+
+      stats.categories[category] = (stats.categories[category] || 0) + 1;
+      stats.years[year] = (stats.years[year] || 0) + 1;
+      stats.months[month] = (stats.months[month] || 0) + 1;
+      stats.suppliers[supplier] = (stats.suppliers[supplier] || 0) + 1;
+
+      if (typeof doc.totalAmount === "number" && Number.isFinite(doc.totalAmount)) {
+        stats.documentsWithAmount += 1;
+        stats.totalsByCurrency[currency] =
+          (stats.totalsByCurrency[currency] || 0) + doc.totalAmount;
+      } else {
+        stats.documentsWithoutAmount += 1;
+      }
+    }
+
+    const objectToSortedArray = (objectValue) =>
+      Object.entries(objectValue)
+        .map(([key, value]) => ({
+          key,
+          count: value,
+        }))
+        .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
+
+    const totalsByCurrency = Object.entries(stats.totalsByCurrency)
+      .map(([currency, total]) => ({
+        currency,
+        total,
+      }))
+      .sort((a, b) => b.total - a.total);
+
+    res.json({
+      ok: true,
+      stats: {
+        totalDocuments: stats.totalDocuments,
+
+        doneCount: stats.processing.done || 0,
+        processingCount: stats.processing.processing || 0,
+        uploadedCount: stats.processing.uploaded || 0,
+        failedCount: stats.processing.failed || 0,
+
+        classifiedCount: stats.classification.classified || 0,
+        pendingClassificationCount: stats.classification.pending || 0,
+        failedClassificationCount: stats.classification.failed || 0,
+
+        documentsWithAmount: stats.documentsWithAmount,
+        documentsWithoutAmount: stats.documentsWithoutAmount,
+
+        totalsByCurrency,
+        categoryCounts: objectToSortedArray(stats.categories),
+        yearCounts: objectToSortedArray(stats.years),
+        monthCounts: objectToSortedArray(stats.months),
+        supplierCounts: objectToSortedArray(stats.suppliers).slice(0, 8),
+
+        lastUpdated: stats.lastUpdated,
+      },
+    });
+  } catch (err) {
+    console.error("STATS ERROR:", err);
 
     res.status(500).json({
       ok: false,
