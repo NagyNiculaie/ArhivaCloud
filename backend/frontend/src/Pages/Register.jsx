@@ -53,7 +53,7 @@ function Register() {
     <div style={styles.page}>
       <div style={styles.card}>
         <h1 style={styles.title}>Creare cont</h1>
-        <p style={styles.subtitle}>Înregistrează-te în Arhiva Cloud</p>
+        <p style={styles.subtitle}>Înregistrează-te în ArhivIQ</p>
 
         <form onSubmit={handleRegister} style={styles.form}>
           <input

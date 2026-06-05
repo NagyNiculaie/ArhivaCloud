@@ -45,7 +45,7 @@ function Login() {
     <div style={styles.page}>
       <div style={styles.card}>
         <h1 style={styles.title}>Autentificare</h1>
-        <p style={styles.subtitle}>Intră în contul tău Arhiva Cloud</p>
+        <p style={styles.subtitle}>Intră în contul tău ArhivIQ</p>
 
         <form onSubmit={handleLogin} style={styles.form}>
           <input
